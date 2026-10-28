@@ -144,7 +144,8 @@ def separation(S, qw, sel):
     full = profiles(Sm, (sel * qw)[None])[0]  # (M,D) centred across models
     spread_q = np.nanstd(np.where(sel[:, None], np.nanmean(Sm, 1), np.nan), 0)  # per-dim sd of the model-mean stat across questions
     effect = np.nanmean(np.nanstd(full, 0) / spread_q)  # between-model sd / between-question sd: how big model differences are
-    return {'rel_q': corr_models(A, B), 'id_q': ident(A, B), 'rel_r': corr_models(R0, R1), 'effect': effect}
+    return {'rel_q': corr_models(A, B), 'id_q': ident(A, B), 'rel_r': corr_models(R0, R1), 'effect': effect,
+            'spread': float(np.nanmean(np.nanstd(full, 0)))}  # between-model sd of the profile, in the statistic's own units
 
 
 def main():
