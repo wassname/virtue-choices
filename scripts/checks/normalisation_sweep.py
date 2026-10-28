@@ -145,7 +145,10 @@ def separation(S, qw, sel):
     spread_q = np.nanstd(np.where(sel[:, None], np.nanmean(Sm, 1), np.nan), 0)  # per-dim sd of the model-mean stat across questions
     effect = np.nanmean(np.nanstd(full, 0) / spread_q)  # between-model sd / between-question sd: how big model differences are
     return {'rel_q': corr_models(A, B), 'id_q': ident(A, B), 'rel_r': corr_models(R0, R1), 'effect': effect,
-            'spread': float(np.nanmean(np.nanstd(full, 0)))}  # between-model sd of the profile, in the statistic's own units
+            'spread': float(np.nanmean(np.nanstd(full, 0))),  # between-model sd of the profile, in the statistic's own units (includes noise)
+            # spread that repeats across disjoint halves: sqrt of the cross-half covariance across models (noise in A and B is independent).
+            # Half-sample profiles carry twice the full-data noise but the same signal, so this estimates the noise-free between-model sd.
+            'reliable_spread': float(np.sqrt(max(0., np.nanmean(np.nansum(A * B, 1) / (A.shape[1] - 1)))))}
 
 
 def main():

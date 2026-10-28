@@ -56,6 +56,17 @@ jsq = np.array([np.mean([0.5 * ((P[a, i, :, :k] * np.log((P[a, i, :, :k] + 1e-3)
 cluster = np.array([q['eval_cluster'] for q in qs])
 cw = np.array([1 / (cluster == c).sum() for c in cluster])
 weights = {'equal': np.ones(len(qs)), 'game cluster': cw, 'contested': 1 - pbar.max(-1), 'disagreement (JS)': jsq}
+def kendall(Tv, Xs):
+    # per question: mean over option pairs of sign(l_i - l_j) * sign(x_i - x_j); ties count 0; questions with no label difference -> NaN
+    K = mask.shape[1]
+    iu = np.triu_indices(K, 1)
+    pm = (mask[:, iu[0]] & mask[:, iu[1]]).astype(float)  # (Q,pairs)
+    sl = np.sign(Tv[..., iu[0]] - Tv[..., iu[1]]) * pm[:, None, None, :]  # (Q,M,R,pairs)
+    sx = np.sign(Xs[:, iu[0], :] - Xs[:, iu[1], :]) * pm[..., None]  # (Q,pairs,D)
+    out = np.einsum('qmrp,qpd->qmrd', sl, sx) / np.maximum(pm.sum(-1), 1)[:, None, None, None]
+    return np.where((np.abs(sx).sum(1) > 0)[:, None, None, :], out, np.nan)
+
+
 rng3 = np.random.default_rng(3)
 rows = []
 for name in ('dnd', 'groups9', 'virt66', 'style9'):
@@ -68,6 +79,7 @@ for name in ('dnd', 'groups9', 'virt66', 'style9'):
             add('probabilities / per-scene', v, stat(Tv, Xs, mask, 'cov'))
             if v not in ('calibrated (baseline)', 'raw log p', 'sharpness removed (z)'):
                 rows[-1]['effect'] = float('nan')  # consensus removed: per-question model mean is 0, so between-question sd is undefined
+        add('pairing statistic', "Kendall tau (pair signs, ordinal both sides)", kendall(T['raw log p'], Xs))
         S = stat(cal, Xs, mask, 'cov')
         for w, wv in weights.items():
             if w != 'equal':
