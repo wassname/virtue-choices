@@ -20,6 +20,7 @@ COLORS = {'Muse': '#7b3294', 'Qwen': '#1b9e77', 'Gemini': '#c65a00', 'Luna': '#0
 rows = [json.loads(x) for x in J.open()]
 src = {q: ('games' if q.startswith('machiavelli') else 'everyday') for q in {r['source_id'] for r in rows}}
 rng = np.random.default_rng(20261029)
+export = {'kinds': [k for k, _ in KINDS], 'labels': [l.replace('\n', ' ') for _, l in KINDS], 'sources': {}}
 fig, axs = plt.subplots(1, 2, figsize=(10, 4.6), sharey=True, constrained_layout=True)
 for ax, (s, title) in zip(axs, (('games', 'Game scenes'), ('everyday', 'Everyday dilemmas'))):
     for j, (model, name) in enumerate(NAMES.items()):
@@ -31,6 +32,7 @@ for ax, (s, title) in zip(axs, (('games', 'Game scenes'), ('everyday', 'Everyday
         A = np.array([np.mean(per_q[q], 0) for q in qids])  # questions x kinds (mean of the 2 answers)
         boot = np.array([A[rng.integers(0, len(A), len(A))].mean(0) for _ in range(1000)])
         lo, hi = np.percentile(boot, [2.5, 97.5], 0)
+        export['sources'].setdefault(s, {})[name] = {'mean': A.mean(0).round(4).tolist(), 'lo': lo.round(4).tolist(), 'hi': hi.round(4).tolist(), 'questions': len(A)}
         y = np.arange(len(KINDS)) + (j - 2.5) * .11
         ax.errorbar(A.mean(0), y, xerr=[A.mean(0) - lo, hi - A.mean(0)], fmt='o', ms=5, color=COLORS[name], elinewidth=1, capsize=0, label=name)
     ax.set_title(title, loc='left', fontsize=10)
@@ -43,6 +45,7 @@ for ax, (s, title) in zip(axs, (('games', 'Game scenes'), ('everyday', 'Everyday
 axs[0].set_yticks(range(len(KINDS)), [k[1] for k in KINDS], fontsize=8)
 axs[0].invert_yaxis()
 axs[1].legend(fontsize=8, frameon=False, loc='lower right')
+(J.parent / 'reason_types_site.json').write_text(json.dumps(export, indent=1))
 out = ROOT / 'outputs/20261029_reason_types_v12/reason_types.png'
 fig.savefig(out, dpi=130)
 print(out)

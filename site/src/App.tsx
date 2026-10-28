@@ -4,6 +4,8 @@ import rc from './data/rules_consistency.json'
 import spider from './data/spider.json'
 import Spider, { type SpiderData } from './Spider'
 import { ConsistencyTable, ExampleTable } from './Tables'
+import reasons from './data/reason_types.json'
+import ReasonTypes, { type ReasonData } from './ReasonTypes'
 
 // Data: outputs/20261027_random1000_v12/calibration_heldout/dnd_web.json and the page build's rules_consistency.json + figures, copied by `just site-build`.
 // Order (wassname, AGENTS.md "Results narrative"): the narrative first, linking to numbered figures; the figures follow, each with its caption directly under it. -- PI/OpenAI
@@ -28,6 +30,7 @@ export default function App() {
       <p>But if we zoom in, some lean more chaotic or less good (<Fig n={2} />, <Fig n={3} />). In game scenes Qwen picks less lawful and less good options than DeepSeek, and Gemini less good ones; in everyday dilemmas Muse picks slightly less good options.</p>
       <p>Within that there is some nuance in their definition of good (<Fig n={4} />). Luna leans towards truthfulness and inquiry over kindness and forbearance; the other models lean less clearly.</p>
       <p>Do they really choose as themselves? Mostly; Haiku, Qwen, Gemini and DeepSeek still follow the character a little (<Fig n={5} />).</p>
+      <p>They differ more in what they say they weigh than in what they choose (<Fig n={6} />). In game scenes Gemini appeals to its own interest about three times as often as Haiku, and Qwen to its character ("I value honesty").</p>
 
       <figure id="fig1">
         <Overview data={data} />
@@ -58,6 +61,12 @@ export default function App() {
         <figcaption><b>Figure 5. Do they choose as themselves?</b> Pairs of scenes differ only in the character's personality, for example a woman whose life dream is to climb Everest, or one afraid of heights, offered the last place on an expedition.
           Grey: change when the same scene is asked again. Colour: extra change when only the personality flips. Black tick: what chance gives (95%).
           <span className="footnote">4 test scenes, 4 answers per version. Some change is reasonable: a promise the character made is still a promise.</span></figcaption>
+      </figure>
+      <figure id="fig6">
+        <ReasonTypes data={reasons as ReasonData} />
+        <figcaption><b>Figure 6. What models say they weigh.</b> Each answer's written reasoning (2–5 sentences) was classified by a judge model (Jev 1.14) into kinds of appeal; a dot is a model's average share, the line its 95% interval over questions. Gemini stands out on self-interest in game scenes, Qwen and Haiku on character, Muse on obligation.
+          Hover a dot for its value, or the legend to highlight a model.
+          <span className="footnote">This is what the models write, which may partly be a writing habit (Qwen often opens with "I value…"). Their choices point the same way for self-interest, but about a third as strongly: measured on the options they pick, the differences are similar in size to the virtue differences in Figures 2–4. Two further kinds (following the original character's wishes; unclear) are at most about 3% for every model and not shown. 11,970 answers; judge spot-checked on 20 hash-chosen answers.</span></figcaption>
       </figure>
 
       <h2>Appendix: what the model sees, and the labels</h2>

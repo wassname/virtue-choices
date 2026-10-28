@@ -120,6 +120,7 @@ site-build run="outputs/20261027_random1000_v12":
     cp "{{run}}/calibration_heldout/dnd_web.json" site/src/data/dnd_web.json
     cp .local/choice_preview/random1000/rules_consistency.json site/src/data/rules_consistency.json
     cp .local/choice_preview/random1000/spider.json site/src/data/spider.json
+    cp outputs/20261029_reason_types_v12/reason_types_site.json site/src/data/reason_types.json
     mkdir -p site/public/figures && cp .local/choice_preview/random1000/{style_spider_absolute,style_spider,role_play}.png site/public/figures/
     cd site && pnpm install --frozen-lockfile && pnpm exec tsc --noEmit && pnpm exec vite build
 
