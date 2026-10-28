@@ -141,7 +141,10 @@ def separation(S, qw, sel):
     A, B = profiles(Sm, WA), profiles(Sm, WB)
     W1 = (sel * qw)[None]
     R0, R1 = profiles(S[:, :, 0], W1), profiles(S[:, :, 1], W1)
-    return {'rel_q': corr_models(A, B), 'id_q': ident(A, B), 'rel_r': corr_models(R0, R1)}
+    full = profiles(Sm, (sel * qw)[None])[0]  # (M,D) centred across models
+    spread_q = np.nanstd(np.where(sel[:, None], np.nanmean(Sm, 1), np.nan), 0)  # per-dim sd of the model-mean stat across questions
+    effect = np.nanmean(np.nanstd(full, 0) / spread_q)  # between-model sd / between-question sd: how big model differences are
+    return {'rel_q': corr_models(A, B), 'id_q': ident(A, B), 'rel_r': corr_models(R0, R1), 'effect': effect}
 
 
 def main():
@@ -153,9 +156,6 @@ def main():
     out = []
     print(f'# Normalisation sweep\n\n{len(qs)} questions, models: {", ".join(m.split("/")[-1] for m in models)}; explore {explore.sum()} / confirm {(~explore).sum()}\n')
 
-    # shuffled null: permute model identity independently per question (both answers move together)
-    perm = np.stack([rng.permutation(len(models)) for _ in qs])
-    Pnull = P[np.arange(len(qs))[:, None], perm]
     for source in ('machiavelli', 'daily_dilemmas'):
         for half, hsel in (('explore', explore), ('confirm', ~explore)):
             sel = (src == source) & hsel
@@ -166,20 +166,20 @@ def main():
                             S = stat(T, Xl, mask, kind)
                             for wn, qw in weights.items():
                                 out.append(dict(source=source, half=half, dims=setname, labels=lt, probs=pt, stat=kind, weight=wn, **separation(S, qw, sel)))
-                # null for the plain baseline
-                Sn = stat(p_transforms(Pnull, mask)['logp'], Xs, mask, 'cov')
-                out.append(dict(source=source, half=half, dims=setname, labels='raw', probs='logp', stat='cov', weight='NULL-shuffled', **separation(Sn, weights['equal'], sel)))
+                # shuffled null for the plain baseline: permute model identity per question (both answers move together), mean of 20
+                null = [separation(stat(p_transforms(P[np.arange(len(qs))[:, None], np.stack([rng.permutation(len(models)) for _ in qs])], mask)['logp'], Xs, mask, 'cov'), weights['equal'], sel) for _ in range(20)]
+                out.append(dict(source=source, half=half, dims=setname, labels='raw', probs='logp', stat='cov', weight='NULL-shuffled x20', **{k: float(np.mean([n[k] for n in null])) for k in null[0]}))
     df = pl.DataFrame(out)
     df.write_parquet(RUN / 'normalisation_sweep.parquet')
     key = ['source', 'dims', 'labels', 'probs', 'stat', 'weight']
-    wide = df.filter(pl.col('half') == 'explore').select(key + ['rel_q', 'id_q', 'rel_r']).join(
+    wide = df.filter(pl.col('half') == 'explore').select(key + ['rel_q', 'id_q', 'rel_r', 'effect']).join(
         df.filter(pl.col('half') == 'confirm').select(key + [pl.col('rel_q').alias('rel_q_confirm'), pl.col('id_q').alias('id_q_confirm')]), on=key)
     pl.Config.set_tbl_formatting('MARKDOWN'); pl.Config.set_tbl_rows(200); pl.Config.set_tbl_cols(20); pl.Config.set_float_precision(2); pl.Config.set_tbl_width_chars(300); pl.Config.set_tbl_hide_dataframe_shape(True); pl.Config.set_tbl_hide_column_data_types(True)
     for source in ('machiavelli', 'daily_dilemmas'):
         for setname in sets:
             w = wide.filter((pl.col('source') == source) & (pl.col('dims') == setname))
-            base = w.filter((pl.col('labels') == 'raw') & (pl.col('probs') == 'logp') & (pl.col('stat') == 'cov') & pl.col('weight').is_in(['equal', 'NULL-shuffled']))
-            top = w.filter(pl.col('weight') != 'NULL-shuffled').sort('rel_q', descending=True).head(5)
+            base = w.filter((pl.col('labels') == 'raw') & (pl.col('probs') == 'logp') & (pl.col('stat') == 'cov') & pl.col('weight').is_in(['equal', 'NULL-shuffled x20']))
+            top = w.filter(pl.col('weight') != 'NULL-shuffled x20').sort('rel_q', descending=True).head(5)
             print(f'\n## {source} / {setname}: baseline and null, then top 5 by explore rel_q (confirm columns are the honest numbers)\n')
             print(pl.concat([base, top]).drop('source', 'dims'))
 

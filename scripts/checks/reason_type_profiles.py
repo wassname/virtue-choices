@@ -24,10 +24,13 @@ for r in rows:
 print(f'{np.isfinite(S[..., 0]).sum()} of {S[..., 0].size} replies judged')
 pl.Config.set_tbl_formatting('MARKDOWN'); pl.Config.set_float_precision(2); pl.Config.set_tbl_hide_dataframe_shape(True)
 pl.Config.set_tbl_hide_column_data_types(True); pl.Config.set_tbl_width_chars(300); pl.Config.set_tbl_cols(20)
+summary = {}
 for source, name in (('machiavelli', 'Games'), ('daily_dilemmas', 'Everyday')):
     sel = src == source
     mean = np.nanmean(S[sel], (0, 2))
     print(f'\n## {name}: mean probability of each kind of appeal\n')
     print(pl.DataFrame({'model': [m.split('/')[-1][:12] for m in models], **{k: mean[:, j] for j, k in enumerate(kinds)}}))
     sep = {half: separation(S, np.ones(len(qs)), sel & h) for half, h in (('explore', explore), ('confirm', ~explore))}
+    summary[source] = {'separation': sep, 'mean': {m: dict(zip(kinds, map(float, mean[i]))) for i, m in enumerate(models)}}
     print(f"\nseparation: rel_q {sep['explore']['rel_q']:.2f} / {sep['confirm']['rel_q']:.2f} (explore / confirm), id_q {sep['explore']['id_q']:.2f} / {sep['confirm']['id_q']:.2f} (chance 0.17)")
+(J.parent / 'reason_type_profiles.json').write_text(json.dumps(summary, indent=1, default=float))

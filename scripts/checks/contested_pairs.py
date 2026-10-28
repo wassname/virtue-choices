@@ -22,7 +22,7 @@ models = [m for m in lines[1]['models'] if m != ds]
 
 for src, sname in SOURCES.items():
     v1 = basis['src'][src]['V'][0]
-    acc = {k: {m: [0., 0.] for m in models + ['self']} for k in ('all', 'contested')}
+    acc = {k: {m: [0., 0.] for m in models + ['self']} for k in ('all', 'contested', 'p_weighted')}
     n_q = n_junk = n_contested_q = 0
     for q in lines[1:]:
         if q['source'] != src or set(models + [ds]) - set(q['models']) or any(len(q['models'][m]['draws']) < 2 for m in q['models']):
@@ -45,15 +45,16 @@ for src, sname in SOURCES.items():
         for m in models + ['self']:
             delta = (d0 - d1) if m == 'self' else calibrated_logp(q, m, maps, fold) - ref
             dd = delta[iu[0]] - delta[iu[1]]
-            for k, mask in (('all', np.ones_like(both)), ('contested', both)):
+            pp = pooled[iu[0]] * pooled[iu[1]] / 1e4  # how likely both options are to be chosen, pooled over all six models
+            for k, mask in (('all', np.ones_like(both)), ('contested', both), ('p_weighted', pp)):
                 acc[k][m][0] += (np.abs(dg) * np.sign(dg) * dd * mask).sum()
                 acc[k][m][1] += (np.abs(dg) * mask).sum()
     print(f'\n## {sname}: {n_q} questions; {n_junk} have an option nobody picks (pooled < {CUT:.0f}%); {n_contested_q} have a contested pair')
-    print(f"{'':22s}{'all pairs':>12s}{'contested only':>16s}")
+    print(f"{'':22s}{'all pairs':>12s}{'contested only':>16s}{'p_i p_j weighted':>18s}")
     for m in models + ['self']:
         name = 'DeepSeek vs itself' if m == 'self' else short(m)
-        a, c = (acc[k][m][0] / acc[k][m][1] for k in ('all', 'contested'))
-        print(f'{name:22s}{a:+12.3f}{c:+16.3f}')
-    for k in ('all', 'contested'):
+        a, c, w = (acc[k][m][0] / acc[k][m][1] for k in ('all', 'contested', 'p_weighted'))
+        print(f'{name:22s}{a:+12.3f}{c:+16.3f}{w:+18.3f}')
+    for k in ('all', 'contested', 'p_weighted'):
         vals = [acc[k][m][0] / acc[k][m][1] for m in models]
         print(f'spread between models ({k}): sd {np.std(vals):.3f}, range {max(vals) - min(vals):.3f}')
