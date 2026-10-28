@@ -46,6 +46,11 @@ choice-question-normalization:
 page-random run="outputs/20261027_random1000_v10" out=".local/choice_preview/random1000":
     OPENBLAS_NUM_THREADS=1 uv run --locked --with matplotlib python scripts/evaluation/plot_probability_eval.py --tables "{{run}}/question_tables.jsonl" --out "{{out}}"
 
+# Judge what each reply's reasoning appeals to (paid, about $0.015 per 1,000 replies), then per-model profiles; run after every evaluation run. -- PI/OpenAI
+reason-types out *runs:
+    uv run --locked --no-sync python scripts/evaluation/judge_reason_types.py {{runs}} --out "{{out}}" --allow-paid --max-new-usd 1
+    cd scripts/checks && uv run --locked --no-sync python -W ignore reason_type_profiles.py "../../{{out}}/reason_types.jsonl"
+
 # PI/OpenAI: Restore displayed choices without model calls.
 prepare out:
     uv run --locked python scripts/data/prepare_inputs.py --out "{{out}}"
