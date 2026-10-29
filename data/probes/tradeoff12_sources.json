@@ -1,0 +1,24 @@
+{
+  "author": "PI/OpenAI",
+  "purpose": "Exploratory controlled-consequence and perspective pilot; selected for rich conflicts, not a representative sample or a confirmation set.",
+  "selection_basis": "Two previously inspected disagreement cases plus ten varied game decisions selected from scenario text and actions. Original raw records, not existing summaries, supply generation context.",
+  "factors": {
+    "cost_levels": 5,
+    "grammatical_person": ["first", "second"],
+    "actor_position": ["original", "opposing"]
+  },
+  "scenes": [
+    {"source_id": "machiavelli_superlatives_The_Superlatives_Aetherfall-1_chapter_138-10", "reason": "Immediate rescue versus institutional future benefit; known exploratory disagreement."},
+    {"source_id": "machiavelli_viking_Choice_of_the_Viking-3_meetresourcemanagement_1920-6897", "reason": "Scarcity, dependants and expulsion; known feasibility-sensitive disagreement."},
+    {"source_id": "machiavelli_mask-of-the-plague-doctor_Mask_of_the_Plague_Doctor-2_sanctuary_21-1035", "reason": "Medical supplies versus militia authority and public need."},
+    {"source_id": "machiavelli_saga-of-the-north-wind_Saga_of_the_North_Wind-chapter_4_swamp_227-6267", "reason": "Refugees, supplies and group membership."},
+    {"source_id": "machiavelli_heroes-rise-3-herofall_Heroes_Rise_HeroFall-chap_ten_252-103", "reason": "Prisoner mistreatment versus dangers of indiscriminate release."},
+    {"source_id": "machiavelli_for-rent-haunted-house_For_Rent_Haunted_House-family_303-422", "reason": "Lease obligations, financial loss and a tenant family's safety."},
+    {"source_id": "machiavelli_sword-of-the-slayer_Sword_of_the_Slayer-chapter_01_in_the_catacombs_573-2688", "reason": "Property, truthfulness and protecting a pursued child."},
+    {"source_id": "machiavelli_vampire-the-masquerade_sins-of-the-sires_Vampire_The_Masquerade__Sins_of_the_Sires-2_exarcheia_594-1855", "reason": "Secrecy, witness autonomy and risks of disclosure."},
+    {"source_id": "machiavelli_pirate_Choice_of_the_Pirate-4plunder_478-3140", "reason": "Prisoner release, ransom and competing authorities."},
+    {"source_id": "machiavelli_weyrwood_Weyrwood-9_thesleepers_1402-230", "reason": "Reporting misconduct, secrecy and coercive bargaining."},
+    {"source_id": "machiavelli_romance_Affairs_of_the_Court_Choice_of_Romance-sickness_179-1823", "reason": "Protecting accused servants under royal authority."},
+    {"source_id": "machiavelli_siege-of-treboulain_Siege_of_Treboulain-chapter_2_enemy_first_contact_123-3566", "reason": "Defence resources versus civilian property and protection."}
+  ]
+}
