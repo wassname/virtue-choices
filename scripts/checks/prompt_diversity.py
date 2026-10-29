@@ -69,29 +69,34 @@ def complete(data, models):
     return {q for q in qs if all(len(data.get((q, m), {})) == 2 for m in models)}
 
 
-data = {k: load(v, 'isekai-v13-short' if 'short' in k else None) for k, v in RUNS.items()}
-five = ['deepseek/deepseek-v4.1-flash', 'meta/muse-spark-1.3-contributor', 'qwen/qwen3.8-27b', 'google/gemini-3.8-flash', 'openai/gpt-5.6-luna']
-six = five + ['anthropic/claude-haiku-5.5']
-rows = []
-for source in ('machiavelli', 'daily_dilemmas'):
-    common = set.intersection(*(complete(data[k], five) for k in ('v6 isekai', 'v10', 'v12')))
-    common = sorted(q for q in common if q.startswith(source))
-    for k in ('v6 isekai', 'v10', 'v12'):
-        rows += [r | {'source': source, 'set': 'same 5 models, common questions'} for r in summarise(k, data[k], common, five)]
-short_q = sorted(complete(data['two-line (v13 short)'], six) & complete(data['v12'], six))
-for k in ('v12', 'two-line (v13 short)'):
-    rows += [r | {'source': 'machiavelli', 'set': f'6 models, {len(short_q)} pilot game questions'} for r in summarise(k, data[k], short_q, six)]
-# who is the outlier under v12: each model's mean single-answer JS to the others, minus the others' mean within-model JS
-seven = six + ['x-ai/grok-4.3']
-for source in ('machiavelli', 'daily_dilemmas'):
-    qs = sorted(q for q in complete(data['v12'], seven) if q.startswith(source))
-    for m in seven:
-        d = [np.mean([js(data['v12'][q, m][i], data['v12'][q, o][j]) for o in seven if o != m for i in (0, 1) for j in (0, 1)]) - np.mean([js(data['v12'][q, o][0], data['v12'][q, o][1]) for o in seven]) for q in qs]
-        rows.append(dict(prompt='v12', metric='JS excess, this model vs the others', source=source, set=m.split('/')[-1], questions=len(qs), models=7, excess=float(np.mean(d))))
-pl.Config.set_tbl_formatting('MARKDOWN'); pl.Config.set_float_precision(3); pl.Config.set_tbl_rows(80); pl.Config.set_tbl_hide_dataframe_shape(True)
-pl.Config.set_tbl_hide_column_data_types(True); pl.Config.set_tbl_width_chars(250); pl.Config.set_tbl_cols(14); pl.Config.set_fmt_str_lengths(40)
-df = pl.DataFrame(rows)
-print('# Between-model diversity by prompt version (label-free; single answers)\n')
-print(df.filter(pl.col('metric') != 'JS excess, this model vs the others').select('source', 'set', 'prompt', 'metric', 'questions', 'between', 'within', 'excess', 'lo', 'hi', 'ratio'))
-print('\n## v12: which model differs most from the rest (JS excess over within-model noise)\n')
-print(df.filter(pl.col('metric') == 'JS excess, this model vs the others').select('source', 'set', 'questions', 'excess').sort('source', 'excess', descending=[False, True]))
+def main():
+    data = {k: load(v, 'isekai-v13-short' if 'short' in k else None) for k, v in RUNS.items()}
+    five = ['deepseek/deepseek-v4.1-flash', 'meta/muse-spark-1.3-contributor', 'qwen/qwen3.8-27b', 'google/gemini-3.8-flash', 'openai/gpt-5.6-luna']
+    six = five + ['anthropic/claude-haiku-5.5']
+    rows = []
+    for source in ('machiavelli', 'daily_dilemmas'):
+        common = set.intersection(*(complete(data[k], five) for k in ('v6 isekai', 'v10', 'v12')))
+        common = sorted(q for q in common if q.startswith(source))
+        for k in ('v6 isekai', 'v10', 'v12'):
+            rows += [r | {'source': source, 'set': 'same 5 models, common questions'} for r in summarise(k, data[k], common, five)]
+    short_q = sorted(complete(data['two-line (v13 short)'], six) & complete(data['v12'], six))
+    for k in ('v12', 'two-line (v13 short)'):
+        rows += [r | {'source': 'machiavelli', 'set': f'6 models, {len(short_q)} pilot game questions'} for r in summarise(k, data[k], short_q, six)]
+    # who is the outlier under v12: each model's mean single-answer JS to the others, minus the others' mean within-model JS
+    seven = six + ['x-ai/grok-4.3']
+    for source in ('machiavelli', 'daily_dilemmas'):
+        qs = sorted(q for q in complete(data['v12'], seven) if q.startswith(source))
+        for m in seven:
+            d = [np.mean([js(data['v12'][q, m][i], data['v12'][q, o][j]) for o in seven if o != m for i in (0, 1) for j in (0, 1)]) - np.mean([js(data['v12'][q, o][0], data['v12'][q, o][1]) for o in seven]) for q in qs]
+            rows.append(dict(prompt='v12', metric='JS excess, this model vs the others', source=source, set=m.split('/')[-1], questions=len(qs), models=7, excess=float(np.mean(d))))
+    pl.Config.set_tbl_formatting('MARKDOWN'); pl.Config.set_float_precision(3); pl.Config.set_tbl_rows(80); pl.Config.set_tbl_hide_dataframe_shape(True)
+    pl.Config.set_tbl_hide_column_data_types(True); pl.Config.set_tbl_width_chars(250); pl.Config.set_tbl_cols(14); pl.Config.set_fmt_str_lengths(40)
+    df = pl.DataFrame(rows)
+    print('# Between-model diversity by prompt version (label-free; single answers)\n')
+    print(df.filter(pl.col('metric') != 'JS excess, this model vs the others').select('source', 'set', 'prompt', 'metric', 'questions', 'between', 'within', 'excess', 'lo', 'hi', 'ratio'))
+    print('\n## v12: which model differs most from the rest (JS excess over within-model noise)\n')
+    print(df.filter(pl.col('metric') == 'JS excess, this model vs the others').select('source', 'set', 'questions', 'excess').sort('source', 'excess', descending=[False, True]))
+
+
+if __name__ == '__main__':
+    main()
