@@ -9,10 +9,12 @@ import gzip
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import sys
 
 import httpx
+from dotenv import load_dotenv
 from loguru import logger
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -57,6 +59,21 @@ def reserve_unknown_fee(event: dict, out: Path, reservation_usd: float = RESERVA
     return reservation_usd
 
 
+# OrcaRouter (OpenAI-compatible) for orca/ models, e.g. the abliterated DeepSeek V4.1 Flash (wassname 2026-10-29). It returns no
+# provider, no usage.cost and its own model name: keep the raw name, name the provider, and charge list price with no cache discount.
+ORCA_URL = "https://api.orcarouter.ai/v1/chat/completions"
+ORCA_USD_PER_MILLION = {"orca/orcacyber-flash-1.0": (0.80, 1.60)}
+
+
+def orca_normalise(body: dict, model: str) -> dict:
+    assert "cost" not in body["usage"] and "provider" not in body, "OrcaRouter response format changed"
+    inp, out = ORCA_USD_PER_MILLION[model]
+    u = body["usage"]
+    cost = (u["prompt_tokens"] * inp + u["completion_tokens"] * out) / 1e6
+    return body | {"model": f"{model} | reported: {body['model']}", "provider": "OrcaRouter",
+                   "usage": u | {"cost": cost, "cost_source": "list price, no cache discount; OrcaRouter returns no cost"}}
+
+
 async def run_requests(packets: list[dict], out: Path, *, max_new_usd: float, concurrency: int = 8,
                        key_source: str = "env", refresh: bool = False, cache_write: bool = True,
                        project_cap_usd: float = PROJECT_CAP_USD,
@@ -82,6 +99,10 @@ async def run_requests(packets: list[dict], out: Path, *, max_new_usd: float, co
     clock = asyncio.get_running_loop().time
     cache = ROOT / "data/interim/action_choice_cache"
     cache.mkdir(parents=True, exist_ok=True)
+    @functools.cache
+    def orca_authorization() -> dict[str, str]:
+        load_dotenv(ROOT / ".env")
+        return {"Authorization": "Bearer " + os.environ["ORCAROUTER_API_KEY"]}
     @functools.cache
     def authorization() -> dict[str, str]:
         return {"Authorization": "Bearer " + api_key(key_source)}
@@ -125,7 +146,10 @@ async def run_requests(packets: list[dict], out: Path, *, max_new_usd: float, co
                                     chunks = []
                                     try:
                                         async with capacity:
-                                            async with client.stream("POST", "https://openrouter.ai/api/v1/chat/completions", json=payload, headers=authorization()) as response:
+                                            orca = payload["model"].startswith("orca/")
+                                            url, sent, headers = (ORCA_URL, {k: v for k, v in payload.items() if k != "provider"}, orca_authorization()) if orca else (
+                                                "https://openrouter.ai/api/v1/chat/completions", payload, authorization())
+                                            async with client.stream("POST", url, json=sent, headers=headers) as response:
                                                 event |= {"http_status": response.status_code, "response_headers": dict(response.headers)}
                                                 async for chunk in response.aiter_bytes():
                                                     chunks.append(chunk)
@@ -162,6 +186,8 @@ async def run_requests(packets: list[dict], out: Path, *, max_new_usd: float, co
                                             raise
                                     else:
                                         body = {"error": {"message": event["response_text"]}}
+                                    if payload["model"].startswith("orca/") and response.status_code == 200 and "error" not in body:
+                                        body = orca_normalise(body, payload["model"])
                                     if "usage" in body and "cost" in body["usage"]:
                                         charge = body["usage"]["cost"]
                                         assert type(charge) in (int, float) and math.isfinite(charge) and charge >= 0
