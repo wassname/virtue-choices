@@ -62,7 +62,7 @@ def prepare(families_path: Path, review_path: Path, out: Path, draws: int) -> No
     config = json.loads((ROOT / 'data/models/probability_eval_isekai_v12.json').read_text())
     haiku = json.loads((ROOT / 'data/models/probability_eval_isekai_v12_haiku.json').read_text())
     config['models'].update(haiku['models'])
-    config.update(protocol=PROTOCOL, scope='tradeoff-pilot-20261029', concurrency=12)
+    config.update(protocol=PROTOCOL, scope='tradeoff-pilot-20261029', concurrency=60)
     rows = [row for family in families for row in render_family(family)]
     packets = []
     for row in rows:
@@ -119,8 +119,8 @@ def run(out: Path, stage: str, draw: int, max_usd: float) -> None:
         assert (out / 'smoke/feedback_review.md').exists(), 'Read smoke feedback before expansion'
         packets = [p for p in packets if not smoke(p) and (stage == 'rest' or p['metadata']['draw'] == draw)]
         batch = out / ('rest' if stage == 'rest' else f'draw{draw}')
-    run_batch(packets, batch, max_usd=max_usd, reservation=manifest['reservation_usd'], concurrency=12)
     config = json.loads((out / 'config.json').read_text())
+    run_batch(packets, batch, max_usd=max_usd, reservation=manifest['reservation_usd'], concurrency=config['concurrency'])
     results = [parse(r, config) for r in load_jsonl(batch / 'receipts.jsonl')]
     (batch / 'choices.jsonl').write_text(''.join(json.dumps(r, ensure_ascii=False) + '\n' for r in results))
     counts = Counter(r['status'] for r in results)
