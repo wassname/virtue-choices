@@ -101,7 +101,18 @@ def analyse(out: Path) -> None:
     for a, b in itertools.combinations(range(len(models)), 2):
         pairs.append({'a': models[a], 'b': models[b], **{metric: ci((array[:, a] - array[:, b]) * 100, boot)
                                                       for metric, array in per_family.items()}})
+    leave_one_out = []
+    for excluded, fid in enumerate(fids):
+        kept = np.arange(len(fids)) != excluded
+        means = {metric: array[kept].mean(axis=0) * 100 for metric, array in per_family.items()}
+        leave_one_out.append({'excluded_family': fid,
+            'summary': [{'model': model, **{metric: float(v[mi]) for metric, v in means.items()}}
+                        for mi, model in enumerate(models)],
+            'paired_model_differences': [{'a': models[a], 'b': models[b],
+                **{metric: float(v[a] - v[b]) for metric, v in means.items()}}
+                for a, b in itertools.combinations(range(len(models)), 2)]})
     (out / 'estimates.json').write_text(json.dumps({'summary': summaries, 'paired_model_differences': pairs,
+        'leave_one_family_out_point_estimates': leave_one_out,
         'per_family': {k: v.tolist() for k, v in per_family.items()}, 'families': fids, 'models': models}, indent=2) + '\n')
     fmt = lambda v: f'{v[0]:.1f} [{v[1]:.1f}, {v[2]:.1f}]'
     report = ['# Controlled trade-off pilot', 'Author: PI/OpenAI.',
@@ -110,7 +121,7 @@ def analyse(out: Path) -> None:
               tabulate([[config['models'][s['model']]['display_name']] + [fmt(s[k]) for k in per_family] for s in summaries],
                   headers=['Model', 'Target chosen %', 'Stated target %', 'High−low cost (pp)', 'First−second (pp)', 'Opposing−original (pp)'], tablefmt='pipe'),
               'Chance target selection, averaged with equal family/role/person/level weights: ' + f'{chance.mean() * 100:.1f}%. Cost/person contrasts have a zero chance expectation. Role differences can have unequal chance rates and different agency.',
-              'Raw cell means: cell_means.jsonl. All paired model comparisons and per-family effects: estimates.json. Feedback: smoke/feedback_review.md and rest/feedback_review.md. No individual family or model pair was selected for this aggregate after inspecting outcomes.']
+              'Raw cell means: cell_means.jsonl. All paired model comparisons, per-family effects and leave-one-family-out point estimates: estimates.json. Leave-one-out results test dependence on individual families, including the Superlatives wording issue flagged before full-run analysis; they are not confidence intervals. Feedback: smoke/feedback_review.md and rest/feedback_review.md. No individual family or model pair was selected for this aggregate after inspecting outcomes.']
     (out / 'results.md').write_text('\n\n'.join(report) + '\n')
     print(out / 'results.md')
 
@@ -149,7 +160,7 @@ def plots(out: Path) -> None:
             ax.set_visible(False)
         handles, labels = axes.flat[0].get_legend_handles_labels()
         fig.legend(handles, labels, loc='outside lower center', ncol=len(labels), frameon=False)
-        fig.suptitle(f'{role.capitalize()} actor: increasing personal cost\nEach point averages both grammatical persons; cost levels equally spaced. Dotted line: uniform random choice.', fontsize=12)
+        fig.suptitle(f'{role.capitalize()} actor: increasing stipulated cost\nEach point averages both grammatical persons; cost levels equally spaced. Dotted line: uniform random choice.', fontsize=12)
         for ext in ('png', 'svg'):
             fig.savefig(out / f'cost_curves_{role}.{ext}', dpi=160)
         plt.close(fig)
