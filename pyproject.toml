@@ -17,6 +17,7 @@ dependencies = [
     "beartype>=0.22",
     "numpy>=2,<3",
     "polars>=2.0.0",
+    "matplotlib>=3.11.2",
 ]
 
 [tool.uv]

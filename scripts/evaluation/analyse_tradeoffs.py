@@ -48,15 +48,30 @@ def ci(values: np.ndarray, draws: np.ndarray) -> tuple[float, float, float]:
     return float(values.mean()), *map(float, np.quantile(means, [.025, .975]))
 
 
+def load_trials(out: Path) -> tuple[list[dict], list[Path]]:
+    stages = [out / 'smoke', out / 'rest']
+    rows = [r for stage in stages for r in read_rows(stage / 'choices.jsonl')]
+    key = lambda r: (r['source_id'], r['model'], r['draw'])
+    trials = {key(r): r for r in rows}
+    assert len(trials) == len(rows), 'Duplicate trial'
+    for stage in sorted((out / 'repairs').glob('attempt_*')):
+        for replacement in read_rows(stage / 'choices.jsonl'):
+            prior = trials[key(replacement)]
+            assert prior['status'] != 'ok', 'Do not redraw valid judgments'
+            assert replacement['replaces_request_key'] == prior['request_key'], 'Broken repair chain'
+            trials[key(replacement)] = replacement
+        stages.append(stage)
+    return list(trials.values()), stages
+
+
 def analyse(out: Path) -> None:
     config = json.loads((out / 'config.json').read_text())
     families = read_rows(out / 'families.jsonl')
     models = list(config['models'])
     fids = [f['source_id'] for f in families]
-    stages = [out / 'smoke', out / 'rest']
+    rows, stages = load_trials(out)
     for stage in stages:
         assert (stage / 'feedback_review.md').exists(), f'Read and record feedback first: {stage}'
-    rows = [r for stage in stages for r in read_rows(stage / 'choices.jsonl')]
     expected = read_rows(out / 'packets.jsonl')
     key = lambda r: (r['source_id'], r['model'], r['draw'])
     assert len({key(r) for r in rows}) == len(rows), 'Duplicate trial'
@@ -116,12 +131,27 @@ def analyse(out: Path) -> None:
         'per_family': {k: v.tolist() for k, v in per_family.items()}, 'families': fids, 'models': models}, indent=2) + '\n')
     fmt = lambda v: f'{v[0]:.1f} [{v[1]:.1f}, {v[2]:.1f}]'
     report = ['# Controlled trade-off pilot', 'Author: PI/OpenAI.',
-              f'{len(families)} selected source families, {len(rows)} replies, {len(models)} models. These are synthetic adaptations, not original game outcomes.',
+              f'{len(families)} selected source families, {len(rows)} accepted replies, {len(models)} models. These are synthetic adaptations, not original game outcomes.',
+              f"{sum('replaces_request_key' in r for r in rows)} trials needed format repair, using {sum(len(read_rows(stage / 'choices.jsonl')) for stage in stages[2:])} additional calls with unchanged API payloads. Original errors are retained; accepted answers are conditional on producing a valid probability vector.",
               'Percentages and percentage-point differences; brackets are paired source-family bootstrap 95% intervals (10,000 resamples). Twelve selected families do not support population-wide claims. Target policies are descriptive outcomes, not a common goodness scale.',
-              tabulate([[config['models'][s['model']]['display_name']] + [fmt(s[k]) for k in per_family] for s in summaries],
+              tabulate([[config['models'][s['model']]['display_name']] + [fmt(s[k]) for k in per_family]
+                        for s in sorted(summaries, key=lambda s: s['target_choice'][0], reverse=True)],
                   headers=['Model', 'Target chosen %', 'Stated target %', 'High−low cost (pp)', 'First−second (pp)', 'Opposing−original (pp)'], tablefmt='pipe'),
               'Chance target selection, averaged with equal family/role/person/level weights: ' + f'{chance.mean() * 100:.1f}%. Cost/person contrasts have a zero chance expectation. Role differences can have unequal chance rates and different agency.',
-              'Raw cell means: cell_means.jsonl. All paired model comparisons, per-family effects and leave-one-family-out point estimates: estimates.json. Leave-one-out results test dependence on individual families, including the Superlatives wording issue flagged before full-run analysis; they are not confidence intervals. Feedback: smoke/feedback_review.md and rest/feedback_review.md. No individual family or model pair was selected for this aggregate after inspecting outcomes.']
+              'Raw cell means: cell_means.jsonl. All paired model comparisons, per-family effects and leave-one-family-out point estimates: estimates.json. Leave-one-out results test dependence on individual families, including the Superlatives wording issue flagged before full-run analysis; they are not confidence intervals. Feedback: smoke/feedback_review.md, rest/feedback_review.md and repairs/attempt_*/feedback_review.md. No individual family or model pair was selected for this aggregate after inspecting outcomes.']
+    names = {m: config['models'][m]['display_name'] for m in models}
+    report += ['## Paired model comparisons',
+               'Same cells, equal family weights. These 15 exploratory intervals are not adjusted for multiple comparisons.',
+               tabulate([[names[r['a']] + ' − ' + names[r['b']], fmt(r['target_choice']), fmt(r['cost_high_minus_low'])] for r in pairs],
+                        headers=['Model pair', 'Mean difference (pp)', 'Difference in cost response (pp)'], tablefmt='pipe'),
+               '## All source families',
+               'Target-choice percentages averaged across both actor positions, both grammatical persons and all five costs. Higher is not necessarily better: these are different outcome-defined policies.',
+               tabulate([[fid.split('_')[1]] + list(per_family['target_choice'][fi] * 100) for fi, fid in enumerate(fids)],
+                        headers=['Family'] + [names[m] for m in models], floatfmt='.1f', tablefmt='pipe'),
+               '## Cost curves',
+               'Only 8–12 draws per plotted point; these curves are descriptive. Synthetic outcomes and remaining belief differences are documented in rest/feedback_review.md.',
+               '![Original actor cost curves](cost_curves_original.png)',
+               '![Opposing actor cost curves](cost_curves_opposing.png)']
     (out / 'results.md').write_text('\n\n'.join(report) + '\n')
     print(out / 'results.md')
 
@@ -148,7 +178,10 @@ def plots(out: Path) -> None:
             ax.axhline(chance * 100, color='#bbbbbb', linestyle=':', linewidth=.7)
             game = family['source_id'].split('_')[1].replace('-', ' ')
             policy = ex['target_policy']
-            ax.set_title(f'{fi + 1}. {game}\n' + textwrap.fill(policy if len(policy) <= 100 else policy[:97] + '...', 48), fontsize=9)
+            ax.set_title(f'{fi + 1}. {game}\n' + textwrap.fill(policy, 52), fontsize=9)
+            panel = [r for r in cells if r['family_id'] == family['source_id'] and r['role'] == role]
+            if all(r['chosen_target'] == 1 for r in panel):
+                ax.text(.5, .8, 'All six: 100% at every cost', transform=ax.transAxes, ha='center', fontsize=9, color='#555555')
             ax.set_xticks(range(5), [str(v) for v in ex['variable']['values']], fontsize=9)
             ax.set_xlabel(textwrap.fill(ex['variable']['unit'], 45), fontsize=9)
             ax.set_ylim(-3, 103)
@@ -160,7 +193,7 @@ def plots(out: Path) -> None:
             ax.set_visible(False)
         handles, labels = axes.flat[0].get_legend_handles_labels()
         fig.legend(handles, labels, loc='outside lower center', ncol=len(labels), frameon=False)
-        fig.suptitle(f'{role.capitalize()} actor: increasing stipulated cost\nEach point averages both grammatical persons; cost levels equally spaced. Dotted line: uniform random choice.', fontsize=12)
+        fig.suptitle(f'{role.capitalize()} actor: increasing stipulated cost\nEach point averages both grammatical persons; cost levels equally spaced. Dotted line: uniform random choice.\n8–12 choices per point; descriptive proportions, no pointwise intervals. Coincident lines overlap.', fontsize=11)
         for ext in ('png', 'svg'):
             fig.savefig(out / f'cost_curves_{role}.{ext}', dpi=160)
         plt.close(fig)
