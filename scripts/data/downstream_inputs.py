@@ -13,6 +13,8 @@ from action_choice import repair_source_text
 
 CONDITIONS = ('none', 'immediate', 'later')
 EVIDENCE_RULE = (
+    'Only numbered current_option blocks are choices now; select their current_action, not a question quoted inside future game text. '
+    'Supplied consequences are deliberate foresight: read each option\'s immediate and conditional evidence before deciding. '
     'When supplied, Immediate game text describes the consequence of the current action in this replayed situation. '
     'Next choices are available future decisions, not decisions you have made. Their conditional text applies only if you later '
     'choose that action. Further paths are sampled examples, not inevitable outcomes or commitments. '
@@ -52,22 +54,23 @@ def future_text(record: dict, choice: str) -> str:
     if follows:
         parts.append('Next available choices (not yet made), with their conditional game text:')
         for follow in follows:
-            parts.append('If you later choose [' + clean(follow['choice']) + ']:\n' + clean(follow['text']))
+            parts.append('If you later choose [' + clean(follow['choice']) + ']:\n<conditional_result>\n'
+                         + clean(follow['text']) + '\n</conditional_result>')
     else:
         parts.append('No next choice is recorded in this continuation.')
     if record['further'][choice]:
         parts.append('Further example paths (sampled under random later choices, not commitments or guarantees):')
         for example in record['further'][choice]:
             path = ' → '.join('[' + clean(x) + ']' for x in example['example_path'])
-            parts.append('After ' + path + ':\n' + clean(example['text']))
+            parts.append('After ' + path + ':\n<conditional_result>\n' + clean(example['text']) + '\n</conditional_result>')
     return '\n'.join(parts)
 
 
 def option_text(record: dict, choice: str, condition: str) -> str:
     assert condition in CONDITIONS
-    parts = [' '.join(clean(record['options'][choice]).split())]
+    parts = ['<current_action>' + ' '.join(clean(record['options'][choice]).split()) + '</current_action>']
     if condition != 'none':
-        parts.append('Immediate game text:\n' + clean(record['immediate'][choice]))
+        parts.append('Immediate game text:\n<immediate_game_text>\n' + clean(record['immediate'][choice]) + '\n</immediate_game_text>')
     if condition == 'later':
         parts.append(future_text(record, choice))
     return '\n'.join(parts)
@@ -117,6 +120,7 @@ def render_scenes(records: list[dict], contexts: list[dict]) -> list[dict]:
                         shared.append(reference + ' (shared future evidence, not a current action):\n' + future)
                         for k in keys:
                             options[k] = option_text(record, k, 'immediate') + '\nNext/further evidence: see ' + reference + ' below.'
+            options = {k: '<current_option>\n' + text + '\n</current_option>' for k, text in options.items()}
             actions = '\n'.join(f'{k}: {text}' for k, text in options.items())
             scenes.append({'source_id': family + '::' + condition, 'family_id': family,
                            'original_source_id': record['source_id'], 'replay_state_id': record['replay_state_id'],
