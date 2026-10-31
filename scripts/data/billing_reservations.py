@@ -1,5 +1,6 @@
 """Keep unknown fees and native usage estimates separate from charge receipts. -- PI/Sol and PI/OpenAI"""
 
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -8,6 +9,24 @@ PROJECT_CAP_USD = 80
 EVALUATION_CAP_USD = 12.25
 EVALUATION_SCOPE = "action-choice-eval-v1"
 NATIVE_USAGE_SCOPES = {EVALUATION_SCOPE, "virtue-labels-v2", "legacy-unassigned"}
+
+
+def reserve_unknown_fee(event: dict, out: Path, reservation_usd: float = .01,
+                        scope: str = EVALUATION_SCOPE, *, root: Path = Path(__file__).resolve().parents[2]) -> float:
+    path = root / '.local/billing_reservations.json'
+    rows = json.loads(path.read_text()) if path.exists() else []
+    identity = json.dumps({'payload_key': event['request_key'], 'time': event['time']},
+                          sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+    reservation = {'request_key': hashlib.sha256(identity.encode()).hexdigest(),
+                   'payload_request_key': event['request_key'], 'scope': scope,
+                   'reserved_usd': reservation_usd, 'run': str(out), 'attempt': event['attempt'],
+                   'reason': 'Request may have been billed; no charge receipt returned'}
+    headers = event.get('response_headers', {})
+    if 'x-generation-id' in headers:
+        reservation['response_id'] = headers['x-generation-id']
+    rows.append(reservation)
+    path.write_text(json.dumps(rows, indent=2) + '\n')
+    return reservation_usd
 
 
 def unknown_fees(root: Path, scope: str | None = None) -> float:

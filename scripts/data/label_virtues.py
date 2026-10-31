@@ -1,4 +1,4 @@
-"""Budgeted five-level virtue labels, or an unpaid request/cost preflight. -- PI/Sol"""
+"""Budgeted five-level virtue labels, or an unpaid request/cost preflight. -- PI/Sol and PI/OpenAI"""
 
 import argparse
 import asyncio
@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 from loguru import logger
 
 from virtue_questions import ROOT, RUBRIC_PATH, choices, derive_contrary, identity, load_rubric, parse_answers, request
-from billing_reservations import outstanding, unknown_fees, noncash_reviews
+from billing_reservations import outstanding, unknown_fees, noncash_reviews, reserve_unknown_fee
 
 RESERVATION_USD = .01
 TARIFF = .042 / 1_000_000
@@ -95,10 +95,11 @@ def preflight(args: argparse.Namespace, rubric: dict, items: list[dict], actions
 
 
 async def paid(args: argparse.Namespace, rubric: dict, items: list[dict], actions: list[dict], *, request_fn=request,
-               parse_fn=parse_answers, cache_name="virtues_v2_cache") -> dict:
+               parse_fn=parse_answers, cache_name="virtues_v2_cache", reservation_usd: float = RESERVATION_USD,
+               scope: str = 'virtue-labels-v2') -> dict:
     ledger = ROOT / ".local/billing.jsonl"
     initial = sum(row["cost_usd"] for row in map(json.loads, ledger.read_text().splitlines()))
-    spent = reserved = 0.0
+    spent = reserved = uncertain = 0.0
     count = hits = cells = 0
     feedback = Counter()
     full_feedback = Counter()
@@ -126,7 +127,7 @@ async def paid(args: argparse.Namespace, rubric: dict, items: list[dict], action
                     await one(item, batch, full, payload)
 
             async def one(item, batch, full, payload):
-                nonlocal spent, reserved, count, hits, cells
+                nonlocal spent, reserved, uncertain, count, hits, cells
                 key = identity(payload)
                 path = cache / (key + ".json.gz")
                 cached = path.exists()
@@ -136,11 +137,13 @@ async def paid(args: argparse.Namespace, rubric: dict, items: list[dict], action
                     body = record["response"]
                     hits += 1
                 else:
-                    assert initial + spent + reserved + outstanding(ROOT) + RESERVATION_USD <= args.budget_usd, "Cumulative budget reservation reached"
-                    assert spent + reserved + RESERVATION_USD <= args.max_new_usd, "This run's budget reservation reached"
-                    reserved += RESERVATION_USD
+                    assert initial + spent + reserved + outstanding(ROOT) + reservation_usd <= args.budget_usd, "Cumulative budget reservation reached"
+                    assert spent + uncertain + reserved + reservation_usd <= args.max_new_usd, "This run's budget reservation reached"
+                    reserved += reservation_usd
                     try:
                         for attempt in range(4):
+                            assert initial + spent + reserved + outstanding(ROOT) <= args.budget_usd, 'Cumulative cap reached during retries'
+                            assert spent + uncertain + reserved <= args.max_new_usd, 'Run cap reached during retries'
                             event = {"time": datetime.now(timezone.utc).isoformat(), "request_key": key,
                                      "item_id": item["item_id"], "attempt": attempt,
                                      "choices": [[row["source_id"], row["choice_id"]] for row in batch], "request": payload}
@@ -150,27 +153,39 @@ async def paid(args: argparse.Namespace, rubric: dict, items: list[dict], action
                                 event["error"] = repr(error)
                                 with (args.out / "requests.jsonl").open("a") as stream:
                                     stream.write(json.dumps(event, ensure_ascii=False) + "\n")
+                                if not isinstance(error, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)):
+                                    uncertain += reserve_unknown_fee(event, args.out, reservation_usd, scope, root=ROOT)
                                 raise
-                            event |= {"http_status": response.status_code, "response_text": response.text}
+                            event |= {"http_status": response.status_code, "response_text": response.text,
+                                      "response_headers": dict(response.headers)}
                             with (args.out / "requests.jsonl").open("a") as stream:
                                 stream.write(json.dumps(event, ensure_ascii=False) + "\n")
+                            try:
+                                body = response.json()
+                            except json.JSONDecodeError:
+                                uncertain += reserve_unknown_fee(event, args.out, reservation_usd, scope, root=ROOT)
+                                raise
+                            has_charge = 'usage' in body and 'cost' in body['usage']
+                            if has_charge:
+                                charge = body['usage']['cost']
+                                assert type(charge) in (float, int) and math.isfinite(charge) and charge >= 0
+                                spent += charge
+                                with ledger.open('a') as stream:
+                                    stream.write(json.dumps({'time': event['time'], 'request_key': key, 'response_id': body['id'],
+                                        'cost_usd': charge, 'model': body['model'], 'run': str(args.out), 'scope': scope}) + '\n')
+                                assert charge <= reservation_usd, 'Actual charge exceeded request reservation; stop before another request'
+                            elif response.status_code == 200 or response.status_code == 408 or response.status_code >= 500:
+                                uncertain += reserve_unknown_fee(event, args.out, reservation_usd, scope, root=ROOT)
                             if (response.status_code in {408, 429} or 500 <= response.status_code < 600) and attempt < 3:
                                 logger.warning(f"Transient HTTP {response.status_code}; retry {attempt + 1}/3 for unchanged request {key}.")
                                 await asyncio.sleep(2 ** attempt)
                                 continue
                             response.raise_for_status()
-                            body = response.json()
-                            charge = body["usage"]["cost"]
-                            assert type(charge) in (float, int) and math.isfinite(charge) and charge >= 0
-                            spent += charge
-                            with ledger.open("a") as stream:
-                                stream.write(json.dumps({"time": event["time"], "request_key": key, "response_id": body["id"],
-                                                         "cost_usd": charge, "model": body["model"], "run": str(args.out)}) + "\n")
-                            assert charge <= RESERVATION_USD, "Actual charge exceeded request reservation; stop before another request"
+                            assert has_charge, 'Successful native response lacks actual cost receipt'
                             count += 1
                             break
                     finally:
-                        reserved -= RESERVATION_USD
+                        reserved -= reservation_usd
                 assert body["model"] == rubric["served_model"], body["model"]
                 assert body["provider"] == "TypeSafe", body["provider"]
                 scores = parse_fn(body, payload, item, batch)

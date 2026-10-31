@@ -1,4 +1,4 @@
-"""Exact-request chat cache and one shared capped evaluation ledger scope. -- PI/Sol"""
+"""Exact-request chat cache and one shared capped evaluation ledger scope. -- PI/Sol and PI/OpenAI"""
 
 import asyncio
 import base64
@@ -19,7 +19,7 @@ from loguru import logger
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/data"))
-from billing_reservations import outstanding, unknown_fees, noncash_reviews, PROJECT_CAP_USD, EVALUATION_CAP_USD, EVALUATION_SCOPE
+from billing_reservations import outstanding, unknown_fees, noncash_reviews, reserve_unknown_fee as reserve_fee, PROJECT_CAP_USD, EVALUATION_CAP_USD, EVALUATION_SCOPE
 from label_actions import api_key
 
 SCOPE = EVALUATION_SCOPE
@@ -45,18 +45,7 @@ def transient_provider_error(body: dict) -> bool:
 
 
 def reserve_unknown_fee(event: dict, out: Path, reservation_usd: float = RESERVATION, scope: str = SCOPE) -> float:
-    path = ROOT / ".local/billing_reservations.json"
-    rows = json.loads(path.read_text()) if path.exists() else []
-    reservation = {"request_key": digest({"payload_key": event["request_key"], "time": event["time"]}),
-                   "payload_request_key": event["request_key"], "scope": scope,
-                   "reserved_usd": reservation_usd, "run": str(out), "attempt": event["attempt"],
-                   "reason": "Request may have been billed; no charge receipt returned"}
-    headers = event.get("response_headers", {})
-    if "x-generation-id" in headers:
-        reservation["response_id"] = headers["x-generation-id"]
-    rows.append(reservation)
-    path.write_text(json.dumps(rows, indent=2) + "\n")
-    return reservation_usd
+    return reserve_fee(event, out, reservation_usd, scope, root=ROOT)
 
 
 # OrcaRouter (OpenAI-compatible) for orca/ models, e.g. the abliterated DeepSeek V4.1 Flash (wassname 2026-10-29). It returns no
