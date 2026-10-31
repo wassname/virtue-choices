@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import fcntl
 import json
 from pathlib import Path
+import subprocess
 import sys
 
 from loguru import logger
@@ -40,6 +41,10 @@ def execute(prepared: Path, out: Path, stage: str) -> None:
     for name in ('scripts/data/downstream_inputs.py', 'scripts/evaluation/run_tiny_eval.py'):
         assert sha(ROOT / name) == manifest['code_sha256'][name], name
     smoke = stage.endswith('smoke')
+    calibration = stage == 'labels-calibration-smoke'
+    if stage == 'labels-smoke':
+        checked = json.loads((prepared.parent / 'native_calibration_review.json').read_text())
+        assert checked['approved_for_smoke'] and checked['preflight_sha256'] == sha(prepared / 'manifest.json')
     if not smoke:
         approval = json.loads((prepared.parent / 'smoke_review.json').read_text())
         assert approval['approved_for_expansion'] and approval['preflight_sha256'] == sha(prepared / 'manifest.json')
@@ -50,6 +55,7 @@ def execute(prepared: Path, out: Path, stage: str) -> None:
     (out / 'budget.json').write_text(json.dumps(budget, indent=2) + '\n')
     (out / 'execution.json').write_text(json.dumps({'author': 'PI/OpenAI', 'stage': stage,
         'prepared': str(prepared), 'started_at': datetime.now(timezone.utc).isoformat(),
+        'git_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
         'smoke_selection': 'Agent-selected theft/conditional branching/shared-future control', 'smoke_ids': SMOKE_IDS,
         'code_sha256': {name: sha(ROOT / name) for name in (*manifest['code_sha256'], 'scripts/evaluation/execute_downstream_eval.py', 'scripts/data/billing_reservations.py')}
     }, indent=2) + '\n')
@@ -75,8 +81,12 @@ def execute(prepared: Path, out: Path, stage: str) -> None:
             summary = {}
             for condition in CONDITIONS:
                 actions = label_actions([r for r in scenes if r['condition'] == condition])
+                if calibration:
+                    actions = actions[:manifest['label_batch_size']]
                 for kind in ('virtues', 'dnd'):
                     rubric, items, request_fn, parse_fn = judge_spec(kind)
+                    if calibration:
+                        items = items[:1]
                     destination = out / condition / kind
                     destination.mkdir(parents=True)
                     request = lambda r, i, acts, full_feedback: judge_request(request_fn, r, i, acts, full_feedback=full_feedback)
@@ -84,7 +94,7 @@ def execute(prepared: Path, out: Path, stage: str) -> None:
                         for _, _, _, payload in lv.packets(rubric, items, actions, manifest['label_batch_size'], request_fn=request))
                     remaining = ceiling - conservative_total()
                     assert remaining >= reservation
-                    args = argparse.Namespace(out=destination, batch_size=manifest['label_batch_size'], concurrency=12,
+                    args = argparse.Namespace(out=destination, batch_size=manifest['label_batch_size'], concurrency=1 if calibration else 12,
                         key_source=budget['key_source'], budget_usd=ceiling, max_new_usd=remaining)
                     result = asyncio.run(lv.paid(args, rubric, items, actions, request_fn=request, parse_fn=parse_fn,
                         cache_name='downstream_' + kind + '_cache', reservation_usd=reservation, scope=budget['scope']))
@@ -101,6 +111,6 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--prepared', type=Path, required=True)
     ap.add_argument('--out', type=Path, required=True)
-    ap.add_argument('--stage', choices=['actors-smoke', 'labels-smoke', 'actors-rest', 'labels-rest'], required=True)
+    ap.add_argument('--stage', choices=['actors-smoke', 'labels-calibration-smoke', 'labels-smoke', 'actors-rest', 'labels-rest'], required=True)
     args = ap.parse_args()
     execute(args.prepared, args.out, args.stage)
