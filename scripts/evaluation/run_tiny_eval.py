@@ -236,6 +236,15 @@ PERSONAS_V12 = {
 }
 
 
+def persona_v12(values: str):
+    """v12 with a stated value system in each of the three places where v12 says "your own values"."""
+    system = (SYSTEM_V12.replace('Imagine your own mind, with your own values,', f'{values} Imagine your own mind, with these values,')
+              .replace('would genuinely do with your own values in', 'would genuinely do with these values in'))
+    wrap = lambda c: past_life_v10(c).replace('with your own mind and values.', 'with your own mind and these values.')
+    assert system.count('these values') == 2 and 'own values' not in system and wrap('Actions to choose:\n').count('these values') == 1
+    return system, wrap
+
+
 PROMPTS = {'own-judgement-v5-probabilities': (SYSTEM_V5, wrap_scenario), 'isekai-v6-probabilities': (SYSTEM_V6, lambda c: WRAP_V6.format(content=c)),
            'isekai-v7-probabilities': (SYSTEM_V7, lambda c: WRAP_V6.format(content=c)),
            'isekai-v8a-probabilities': (SYSTEM_V8, lambda c: WRAP_V6.format(content=c)),
@@ -248,7 +257,7 @@ PROMPTS = {'own-judgement-v5-probabilities': (SYSTEM_V5, wrap_scenario), 'isekai
            'isekai-v12-probabilities': (SYSTEM_V12, past_life_v10),
            'isekai-v12-outcomes': (SYSTEM_V12_OUTCOMES, past_life_v10),
            'isekai-v14-neighbour': (SYSTEM_V14_NEIGHBOUR, neighbour_v14),
-           **{f'isekai-v12-persona-{k}': (SYSTEM_V12.replace('Imagine your own mind, with your own values,', f'{v} Imagine your own mind, with these values,'), past_life_v10) for k, v in PERSONAS_V12.items()},
+           **{f'isekai-v12-persona-{k}': persona_v12(v) for k, v in PERSONAS_V12.items()},
            'isekai-v13-short': (SYSTEM_V13_SHORT, past_life_v10),
            'isekai-v13-four-lines': (SYSTEM_V13_FOUR, past_life_v10),
            'normative-c1-probabilities': (SYSTEM_C1, situation_c1),
