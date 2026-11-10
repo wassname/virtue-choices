@@ -142,7 +142,7 @@ def plot_square(sq, names):
              '(lawful good + lawful evil);\ny = the same for (lawful good + chaotic good) minus (lawful evil + chaotic evil). 0 = the mean of the four corners; 1.0 = the full difference between the two sides of an axis.\n'
              'A corner helps to define its own axis, so the random part of its answers pushes it outward. That push is removed, so the two sides of an axis are drawn less than 1.0 apart.\n'
              'Grey diamonds: the other ten personas (not used for the axes); those inside the dashed square are named in the enlarged panel. Crosses: 95% intervals (games or topics resampled).\n'
-             'All personas are DeepSeek with a persona prompt (without "your own mind" and "you, the AI"), one answer per question; default models gave two. The good corners and, less so, the lawful corners are nearer to default DeepSeek\n'
+             'All personas are DeepSeek with a persona prompt (without "your own mind" and "you, the AI"), one answer per question; default models gave two.\nThe good corners and, less so, the lawful corners are nearer to default DeepSeek '
              'than their opposites, so the DeepSeek marker is biased toward good and toward lawful.',
              color=MUTED, fontsize=9)
     fig.tight_layout(rect=(0, .07, 1, .97))
