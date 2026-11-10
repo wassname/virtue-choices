@@ -72,7 +72,7 @@ def plot_square(sq, names):
                                fontsize=10, color=INK, fontweight='bold', zorder=5, bbox=dict(fc=SURFACE, ec='none', pad=.5, alpha=.75))
             if np.abs(p[j] - (cx, cy)).max() < half:  # inside the dashed square: named in the enlarged panel
                 up = p[j, 1] < cy - .8 * half
-                zoom.plot(*p[j], ls='', marker='D', ms=7 if corner else 5, mew=1.2, mfc=INK if corner else 'none', color=INK if corner else MUTED)
+                zoom.plot(*p[j], ls='', marker='D', ms=7 if corner else 5, mew=1.2, mfc=INK if corner else 'none', color=INK if corner else MUTED, clip_on=False)
                 zoom.annotate(pn.replace('-', ' '), p[j], xytext=(0, 7 if up else -7), textcoords='offset points', ha='center', va='bottom' if up else 'top',
                               fontsize=8.5, color=MUTED, zorder=5, bbox=dict(fc=SURFACE, ec='none', pad=.5, alpha=.75))
             elif not corner:
@@ -85,7 +85,7 @@ def plot_square(sq, names):
         for i in range(len(names)):
             zoom.plot([x['lo'][i], x['hi'][i]], [y['est'][i]] * 2, color=COLOUR[sname], lw=1.2)
             zoom.plot([x['est'][i]] * 2, [y['lo'][i], y['hi'][i]], color=COLOUR[sname], lw=1.2)
-            zoom.plot(x['est'][i], y['est'][i], **MARK[sname])
+            zoom.plot(x['est'][i], y['est'][i], zorder=6, **MARK[sname])
         left = x['est'] < np.median(x['est'])
         for side, sel in ((-1, left), (1, ~left)):  # names in a column at each edge, in the order of y
             order = np.flatnonzero(sel)[np.argsort(y['est'][sel])]
