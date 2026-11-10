@@ -101,7 +101,7 @@ def label_leans(d, Xc, idx, cl, explore):
     return {'all': with_interval(idx), 'explore': with_interval(idx[explore[idx]]), 'confirm': with_interval(idx[~explore[idx]]), 'energy': den[idx].sum(0)}
 
 
-def plot(res, names, order, keys=KEYS, personas=PERSONAS, path=OUT / 'persona_keys.png', nrows=1):
+def plot(res, names, order, keys=KEYS, personas=PERSONAS, path=OUT / 'persona_keys.png', nrows=1, prompt='the earlier prompt, which also said "with your own values"'):
     plt.rcParams.update({'font.size': 10, 'text.color': INK, 'axes.labelcolor': MUTED, 'xtick.color': MUTED, 'ytick.color': INK})
     fig, axes = plt.subplots(nrows, len(keys) // nrows, figsize=(12, 4.6 * nrows), sharex=True, sharey=True, facecolor=SURFACE)
     for ax, (kname, (pos, neg)) in zip(axes.flat, keys.items()):
@@ -129,7 +129,7 @@ def plot(res, names, order, keys=KEYS, personas=PERSONAS, path=OUT / 'persona_ke
     fig.legend(handles=handles, loc='upper left', bbox_to_anchor=(.005, 1 - .07 / nrows), ncols=3, frameon=False, fontsize=9)
     fig.suptitle('How far each model leans toward a persona', x=.01, ha='left', fontsize=12)
     fig.text(.01, .008 / nrows, '0 = the mean of the six models. 1.0 = the full difference between the two sides, which are DeepSeek with a persona prompt '
-             f'({", ".join(personas)}).\nA lean is relative to the other models: "like evil" means less toward good than the six-model mean, not evil. '
+             f'({", ".join(personas)}; {prompt}).\nA lean is relative to the other models: "like P" means nearer to persona P than the six-model mean is, not that the model acts as P. '
              'The grey band is 2 sd wide on each side of 0. The strict test of a lean also subtracts the control mean '
              f'(at most {max(np.abs(res[k][s]["null_mean"]).max() for k in keys for s in SOURCES.values()):.3f}, not drawn), so an interval that only just clears the band can fail it. '
              'The persona answers come from DeepSeek, so the DeepSeek row is biased toward the side that is nearer to default DeepSeek. '

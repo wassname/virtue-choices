@@ -165,7 +165,7 @@ def main():
     res = {k: {sname: score_source(dev, key, idx, cl, explore, n_opts) for sname, idx in by_source.items()} for k, key in keys.items()}
     order = list(np.argsort(res['outcome over rule']['games']['est']))
     OUT.mkdir(parents=True, exist_ok=True)
-    persona_keying.plot(res, names, order, KEYS, PERSONAS, OUT / 'persona_pairs.png', nrows=2)
+    persona_keying.plot(res, names, order, KEYS, PERSONAS, OUT / 'persona_pairs.png', nrows=2, prompt='the prompt without "with your own values"')
 
     cell = lambda r, m: (lambda t: f'**{t}**' if r['lo'][m] * r['hi'][m] > 0 else t)(f'{r["est"][m]:+.3f} [{r["lo"][m]:+.2f}, {r["hi"][m]:+.2f}]')
     out = ['# Opposed persona pairs', '',
@@ -225,7 +225,7 @@ def main():
                         'model order repeats, r (games / everyday)': f'{g["reliability"]:.2f} / {e["reliability"]:.2f}'})
     far = {s: [rms(T[:, ds, 0], Tp[:, j], i) for j in range(len(PERSONAS))] for s, i in by_source.items()}  # distance of each persona to default DeepSeek
     nearer = [np.mean([far[s][PERSONAS.index(pn)] for pn in neg]) - np.mean([far[s][PERSONAS.index(pn)] for pn in pos]) for pos, neg in KEYS.values() for s in by_source]
-    evil, d2 = Tp[:, [PERSONAS.index(c) for c in KEYS['good over evil'][1]]].mean(1), T[:, :, 1] - T[:, :, 1].mean(1, keepdims=True)  # for the self-match control
+    evil, d1, d2 = Tp[:, [PERSONAS.index(c) for c in KEYS['good over evil'][1]]].mean(1), *(T[:, :, a] - T[:, :, a].mean(1, keepdims=True) for a in (0, 1))  # for the self-match control
     fair = {s: score_source(np.repeat(d2[:, :, None], 2, 2), T[:, :, 0].mean(1) - evil, i, cl, explore, n_opts) for s, i in by_source.items()}  # key from answer 1, scored on answer 2
     out += ['## Summary: which pairs separate the default models', '',
             'Models are shown with their games / everyday score. Two tests were added after the result was seen.',
@@ -250,12 +250,15 @@ def main():
             f'{max(abs(res[k][s]["est"][ds]) for k in KEYS for s in by_source) / 5:.3f}.', '',
             'Self-match control, on good over evil. In the first six rows the good side is answer 1 of one default model and the other side is the two evil personas; '
             'the key is scored on answer 2 of each model against the six-model mean (games / everyday). The diagonal is a model on a key from its own other answer: '
-            'it holds the repeatable part of that model, so it is above 0 for every model. Each row sums to 0, so the other five cells of a row are pushed down by a fifth of the diagonal. '
-            'In row seven the good side is answer 1 of the six-model mean, which holds a sixth of the own part of each model and so favours no model much: '
-            'this row is the fair estimate of a lean toward good, with 95% intervals. The last row is the real key (the two good personas as the good side, both answers).',
-            'SHOULD: the real score of a model is near its score in row seven. ELSE the difference comes from how like or unlike default DeepSeek the model is, not from good against evil.', '',
+            'it holds the own repeatable part of that model and its lean, so it is above 0 for every model. Each row sums to 0, so the other five cells of a row are pushed down by a fifth of that own part. '
+            'In row seven the good side is answer 1 of the six-model mean, scored on answer 2, with 95% intervals; row eight has the two answers swapped (no intervals). '
+            'These rows hold a sixth of the own part of each model, so they are fairer than the real key, but not exact. The own parts differ in size: a reviewer\'s check (reading_notes.md) '
+            'puts row seven too high for Gemini by 0.01 to 0.02 and too low for DeepSeek by about 0.01. The evil side is still DeepSeek. '
+            'The last row is the real key (the two good personas as the good side, both answers).',
+            'SHOULD: a real score that is a lean toward good keeps its sign and about its size in rows seven and eight. ELSE part of it comes from how like or unlike default DeepSeek the model is.', '',
             tabulate([{'good side from': names[x], **{names[m]: ' / '.join(f'{slope(d2[i], (T[:, x, 0] - evil)[i])[m]:+.3f}' for i in by_source.values()) for m in order[::-1]}} for x in order[::-1]]
                      + [{'good side from': 'the six-model mean', **{names[m]: ' / '.join(cell(fair[s], m) for s in by_source) for m in order[::-1]}},
+                        {'good side from': 'the six-model mean, answers swapped', **{names[m]: ' / '.join(f'{slope(d1[i], (T[:, :, 1].mean(1) - evil)[i])[m]:+.3f}' for i in by_source.values()) for m in order[::-1]}},
                         {'good side from': 'the two good personas (real key)', **{names[m]: ' / '.join(f'{res["good over evil"][s]["est"][m]:+.3f}' for s in by_source) for m in order[::-1]}}],
                      headers='keys', tablefmt='pipe'), '',
             '## Do the keys measure different things?', '',
