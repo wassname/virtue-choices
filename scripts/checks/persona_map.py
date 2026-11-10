@@ -22,7 +22,7 @@ AXES = {'outcome over rule': (['utilitarian'], ['rule-follower']), 'self over lo
 AXIS_LABEL = ('← like rule-follower        like utilitarian →', '← like loyal        like selfish →')
 X, Y = AXES
 N_KEEP = (50, 100, 200)
-ZOOM = .25
+ZOOM = .2
 
 
 def label_points(ax, xs, ys, labels):
@@ -36,6 +36,11 @@ def label_points(ax, xs, ys, labels):
                         bbox=dict(fc=SURFACE, ec='none', pad=1), arrowprops=dict(arrowstyle='-', color=MUTED, lw=.5, shrinkB=5))
 
 
+def diamond(sname):
+    """Persona marker; open for the source whose default marker has a surface fill, so that it does not hide the other source."""
+    return {**MARK[sname], 'marker': 'D'} | ({'mfc': 'none'} if 'mfc' in MARK[sname] else {})
+
+
 def plot(pos, names, band, not_drawn):
     plt.rcParams.update({'font.size': 10, 'text.color': INK, 'axes.labelcolor': MUTED, 'xtick.color': MUTED, 'ytick.color': MUTED})
     fig, (whole, *zooms) = plt.subplots(1, 3, figsize=(15, 7), facecolor=SURFACE)
@@ -46,7 +51,7 @@ def plot(pos, names, band, not_drawn):
         x, y, p = pos[sname]['model'][X], pos[sname]['model'][Y], pos[sname]['persona']
         for j, pn in enumerate(PERSONAS):
             whole.plot([x['est'][ds], p[j, 0]], [y['est'][ds], p[j, 1]], color=COLOUR[sname], lw=.8, alpha=.45)
-            whole.plot(*p[j], **{**MARK[sname], 'marker': 'D'})
+            whole.plot(*p[j], **diamond(sname))
         whole.plot(x['est'], y['est'], ls='', **{**MARK[sname], 'ms': 4, 'mew': 1})
         zoom.add_patch(Rectangle((-band, -band), 2 * band, 2 * band, color=BAND, lw=0, zorder=0))
         for i in range(len(names)):
@@ -62,7 +67,7 @@ def plot(pos, names, band, not_drawn):
         whole.annotate(pn, (twins[:, j, 0].mean(), twins[:, j, 1].min() if below else twins[:, j, 1].max()), xytext=(0, -11 if below else 11),
                        textcoords='offset points', ha='center', va='top' if below else 'bottom', fontsize=10)
     whole.set_xlim(-.8, .8); whole.set_ylim(-.6, 1)
-    whole.set_title('Whole space: a persona prompt moves DeepSeek far', fontsize=11, loc='left')
+    whole.set_title('Whole space: DeepSeek with a persona prompt', fontsize=11, loc='left')
     for ax in (whole, *zooms):
         ax.set_facecolor(SURFACE)
         ax.axhline(0, color=MUTED, lw=.8); ax.axvline(0, color=MUTED, lw=.8)
@@ -73,13 +78,14 @@ def plot(pos, names, band, not_drawn):
         for side in ax.spines.values():
             side.set_visible(False)
     handles = [Line2D([], [], ls='', label=f'default model, {s}', **MARK[s]) for s in SOURCES.values()]
-    handles += [Line2D([], [], ls='', label=f'DeepSeek with a persona prompt, {s}', **{**MARK[s], 'marker': 'D'}) for s in SOURCES.values()]
-    handles.append(Patch(color=BAND, label='no real signal (2 sd)'))
+    handles += [Line2D([], [], ls='', label=f'DeepSeek with a persona prompt, {s}', **diamond(s)) for s in SOURCES.values()]
+    handles.append(Patch(color=BAND, label='control (2 sd)'))
     fig.legend(handles=handles, loc='upper left', bbox_to_anchor=(.005, .95), ncols=5, frameon=False, fontsize=9)
     fig.suptitle('The six default models are close together on these two persona axes, but not over all directions (see the last line)', x=.01, ha='left', fontsize=12)
-    fig.text(.01, .012, '0 = the mean of the six default models. The two personas of an axis are 1.0 apart on it by definition; the map shows where the default models '
-             'fall between them.\nLines join DeepSeek to its own personas (only DeepSeek got the persona prompts; one answer per question). '
-             'Crosses are 95% intervals (games or topics resampled).\nGrey square: range of positions when the persona answers come from unrelated scenes.\n' + not_drawn,
+    fig.text(.01, .012, 'Position = how far the stated preference of a subject for each option follows (persona A minus persona B). 0 = the mean of the six default models; '
+             'the two personas of an axis are 1.0 apart by definition.\nLines join DeepSeek to its own personas (only DeepSeek got the persona prompts; one answer per question). '
+             'Crosses are 95% intervals (games or topics resampled).\nGrey square (control): 2 sd of the position when the persona answers come from unrelated scenes. '
+             'Exact positions of points that overlap: persona_map.md.\n' + not_drawn,
              color=MUTED, fontsize=9)
     fig.tight_layout(rect=(0, .16, 1, .92))
     fig.savefig(OUT / 'persona_map.png', dpi=160, facecolor=SURFACE)
