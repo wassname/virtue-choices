@@ -1,8 +1,8 @@
 """Opposed persona pairs: which pairs separate the six default models, and where the models sit in the square of the four D&D personas.
 
 Fourteen persona prompts on DeepSeek (PERSONAS_V12 in scripts/evaluation/run_tiny_eval.py) give eight persona keys (see persona_keying.py).
-Runs: outputs/*_persona-v2_<persona>. The earlier runs (outputs/*_persona_<persona>) had a prompt that also said "with your own values"; they are used for one comparison section.
-Writes run.md, persona_pairs.png and alignment_square.png to outputs/20261110_persona-v2_pairs.
+Runs: outputs/*_persona-v3_<persona>. The earlier runs (outputs/*_persona-v2_<persona>) had a prompt that also said "your own mind" and "you, the AI"; they are used for one comparison section.
+Writes run.md, persona_pairs.png and alignment_square.png to outputs/20261110_persona-v3_pairs.
 Run from scripts/checks: uv run --locked --no-sync python persona_pairs.py -- Claudypoo[fable], 2026-11-10"""
 
 import json
@@ -17,8 +17,8 @@ import persona_keying
 from normalisation_sweep import load, p_transforms
 from persona_keying import BAND, COLOUR, DISPLAY, INK, MARK, MUTED, N_BOOT, N_SPLITS, ROOT, SOURCES, SURFACE, load_personas, persona_keys, plt, rng, score_source, slope
 
-OUT = ROOT / 'outputs/20261110_persona-v2_pairs'
-TAG, EARLIER = 'persona-v2', 'persona'  # run directories: outputs/*_<tag>_<persona>
+OUT = ROOT / 'outputs/20261110_persona-v3_pairs'
+TAG, EARLIER = 'persona-v3', 'persona-v2'  # run directories: outputs/*_<tag>_<persona>
 CORNERS = ['lawful-good', 'chaotic-good', 'lawful-evil', 'chaotic-evil']
 PERSONAS = [*persona_keying.PERSONAS, 'rationalist', 'taoist', *CORNERS, 'honest', 'kind', 'cautious', 'bold']
 KEYS = {  # name: (personas on the plus side, personas on the minus side)
@@ -61,7 +61,7 @@ def held_out_share(dev, A, idx, cl):
     return num, den
 
 
-def hidden_reasoning_has(tag, persona, patterns=('tension|conflict|contradict', 'own values')):
+def hidden_reasoning_has(tag, persona, patterns=('tension|conflict|contradict', r'\bAI\b|ChatGPT|assistant')):
     """Share of replies whose hidden reasoning matches each pattern. Scenes about a conflict match the first one too (about 0.2)."""
     (run,) = (ROOT / 'outputs').glob(f'*_{tag}_{persona}')
     texts = [json.loads(line)['response']['choices'][0]['message']['reasoning'] or '' for f in run.glob('*/receipts.jsonl') for line in f.open()]
@@ -165,7 +165,7 @@ def main():
     res = {k: {sname: score_source(dev, key, idx, cl, explore, n_opts) for sname, idx in by_source.items()} for k, key in keys.items()}
     order = list(np.argsort(res['outcome over rule']['games']['est']))
     OUT.mkdir(parents=True, exist_ok=True)
-    persona_keying.plot(res, names, order, KEYS, PERSONAS, OUT / 'persona_pairs.png', nrows=2, prompt='the prompt without "with your own values"')
+    persona_keying.plot(res, names, order, KEYS, PERSONAS, OUT / 'persona_pairs.png', nrows=2, prompt='the prompt without "your own mind" and "you, the AI"')
 
     cell = lambda r, m: (lambda t: f'**{t}**' if r['lo'][m] * r['hi'][m] > 0 else t)(f'{r["est"][m]:+.3f} [{r["lo"][m]:+.2f}, {r["hi"][m]:+.2f}]')
     out = ['# Opposed persona pairs', '',
@@ -340,18 +340,18 @@ def main():
             + '; '.join(f'{a}: ' + ', '.join(f'{np.corrcoef(halves[2 * b][i].ravel(), halves[2 * b + 1][i].ravel())[0, 1]:+.2f} ({np.sqrt(noise_share(halves[2 * b], 2, i) * noise_share(halves[2 * b + 1], 2, i)):.2f}) {s}'
                                            for s, i in by_source.items()) for b, a in enumerate(SQUARE)) + '.', '',
             '## The fixed persona prompt against the earlier one', '',
-            'The earlier persona prompt gave the persona values and then said "with your own values" and "with your own mind and values". The fixed prompt says "these values" in all three places. '
+            'The earlier persona prompt gave the persona values and then said "Imagine your own mind, with these values", "what you, the AI, would genuinely do" and "as yourself". The fixed prompt has none of these. '
             'Same questions, same model, 1 answer each.',
             'Names a conflict: the hidden reasoning has the word tension, conflict or contradict. Scenes about a conflict match too (about 0.2), so only a large fall counts. '
-            'Says "own values": the hidden reasoning has these words. They were in the earlier prompt and are not in the fixed one, so a fall shows only that the model repeats the prompt.',
+            'Calls itself an AI: the hidden reasoning has the word AI, ChatGPT or assistant. "The AI" was in the earlier prompt and is not in the fixed one, so a fall alone shows only that the model repeats the prompt.',
             'SHOULD: a persona whose reasoning named the conflict names it less, and a persona that was diluted moves farther from default DeepSeek. ELSE the conflicting sentence was not the cause.',
             f'r earlier to fixed: correlation of the persona preference over all options. Two answers of default DeepSeek give r = '
             + ' and '.join(f'{np.corrcoef(T[i, ds, 0].ravel(), T[i, ds, 1].ravel())[0, 1]:.2f} ({s})' for s, i in by_source.items()) + '; a lower r means that the choices changed, not only the noise.', '']
     Pp0 = load_personas(qs, mask, PERSONAS, EARLIER)
     Tp0 = p_transforms(np.nan_to_num(Pp0), mask)['logp_z'][:, :, 0]
     shared = {s: i[np.isfinite(Pp0[i, :, 0, 0]).all(1)] for s, i in by_source.items()}
-    said = {pn: [*hidden_reasoning_has(EARLIER, pn), *hidden_reasoning_has(TAG, pn)] for pn in PERSONAS}  # conflict, own values: earlier, then fixed
-    rows = [{'persona': pn, 'names a conflict, earlier': said[pn][0], 'names a conflict, fixed': said[pn][2], 'says "own values", earlier': said[pn][1], 'says "own values", fixed': said[pn][3],
+    said = {pn: [*hidden_reasoning_has(EARLIER, pn), *hidden_reasoning_has(TAG, pn)] for pn in PERSONAS}  # conflict, AI: earlier, then fixed
+    rows = [{'persona': pn, 'names a conflict, earlier': said[pn][0], 'names a conflict, fixed': said[pn][2], 'calls itself an AI, earlier': said[pn][1], 'calls itself an AI, fixed': said[pn][3],
              **{f'{s}: {name}': f(i) for s, i in shared.items() for name, f in (
                  ('distance to default, earlier', lambda i: rms(T[:, ds, 0], Tp0[:, j], i)), ('fixed', lambda i: rms(T[:, ds, 0], Tp[:, j], i)),
                  ('r earlier to fixed', lambda i: np.corrcoef(Tp0[i, j].ravel(), Tp[i, j].ravel())[0, 1]))}} for j, pn in enumerate(PERSONAS)]
