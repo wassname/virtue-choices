@@ -33,12 +33,12 @@ def label_points(ax, xs, ys, labels):
         slots = ys[order].mean() + (np.arange(len(order)) - (len(order) - 1) / 2) * ZOOM * .22
         for i, slot in zip(order, slots):
             ax.annotate(labels[i], (xs[i], ys[i]), xytext=(side * ZOOM * .95, slot), ha='left' if side < 0 else 'right', va='center', fontsize=10,
-                        arrowprops=dict(arrowstyle='-', color=MUTED, lw=.5, shrinkB=5))
+                        bbox=dict(fc=SURFACE, ec='none', pad=1), arrowprops=dict(arrowstyle='-', color=MUTED, lw=.5, shrinkB=5))
 
 
 def plot(pos, names, band, not_drawn):
     plt.rcParams.update({'font.size': 10, 'text.color': INK, 'axes.labelcolor': MUTED, 'xtick.color': MUTED, 'ytick.color': MUTED})
-    fig, (whole, *zooms) = plt.subplots(1, 3, figsize=(15, 6.6), facecolor=SURFACE)
+    fig, (whole, *zooms) = plt.subplots(1, 3, figsize=(15, 7), facecolor=SURFACE)
     whole.add_patch(Rectangle((-ZOOM, -ZOOM), 2 * ZOOM, 2 * ZOOM, fill=False, ec=MUTED, ls=(0, (4, 3)), lw=.9))
     whole.annotate('the six default models\n(enlarged on the right)', (-ZOOM, ZOOM), xytext=(-4, 4), textcoords='offset points', ha='right', va='bottom', color=MUTED, fontsize=9)
     ds = names.index('DeepSeek')
@@ -76,12 +76,12 @@ def plot(pos, names, band, not_drawn):
     handles += [Line2D([], [], ls='', label=f'DeepSeek with a persona prompt, {s}', **{**MARK[s], 'marker': 'D'}) for s in SOURCES.values()]
     handles.append(Patch(color=BAND, label='no real signal (2 sd)'))
     fig.legend(handles=handles, loc='upper left', bbox_to_anchor=(.005, .95), ncols=5, frameon=False, fontsize=9)
-    fig.suptitle('On two persona axes the six default models sit close together', x=.01, ha='left', fontsize=12)
+    fig.suptitle('The six default models are close together on these two persona axes, but not over all directions (see the last line)', x=.01, ha='left', fontsize=12)
     fig.text(.01, .012, '0 = the mean of the six default models. The two personas of an axis are 1.0 apart on it by definition; the map shows where the default models '
-             'fall between them. Lines join DeepSeek to its own personas (run on DeepSeek only, 1 answer).\n'
-             'Crosses are 95% intervals (games or topics resampled). Grey square: range of positions when the keys come from unrelated scenes.\n' + not_drawn,
+             'fall between them.\nLines join DeepSeek to its own personas (only DeepSeek got the persona prompts; one answer per question). '
+             'Crosses are 95% intervals (games or topics resampled).\nGrey square: range of positions when the persona answers come from unrelated scenes.\n' + not_drawn,
              color=MUTED, fontsize=9)
-    fig.tight_layout(rect=(0, .12, 1, .92))
+    fig.tight_layout(rect=(0, .16, 1, .92))
     fig.savefig(OUT / 'persona_map.png', dpi=160, facecolor=SURFACE)
 
 
@@ -107,8 +107,8 @@ def main():
             {'pair': 'two default models (mean of 15 pairs)', **{s: np.mean([rms(T[:, a, 0], T[:, b, 1], i) for a, b in pairs]) for s, i in by_source.items()}}]
     dist += [{'pair': f'DeepSeek against DeepSeek with the {pn} prompt', **{s: rms(T[:, ds, 0], Tp[:, j], i) for s, i in by_source.items()}} for j, pn in enumerate(PERSONAS)]
     dist += [{'pair': f'{PERSONAS[a]} against {PERSONAS[b]}', **{s: rms(Tp[:, a], Tp[:, b], i) for s, i in by_source.items()}} for a, b in combinations(range(len(PERSONAS)), 2)]
-    not_drawn = ('Not drawn: over all directions together, two default models differ about as much as DeepSeek and its utilitarian persona (games: '
-                 f'{dist[1]["games"]:.2f} against {dist[2]["games"]:.2f}; answer noise alone gives {dist[0]["games"]:.2f}). The table is in persona_map.md.')
+    not_drawn = ('Not drawn: over all directions together, two default models differ about as much as DeepSeek and its utilitarian persona\n(root mean square difference '
+                 f'of preference per option, games: {dist[1]["games"]:.2f} for the mean of the 15 pairs of models against {dist[2]["games"]:.2f}; two answers of one model: {dist[0]["games"]:.2f}).')
     pos = {sname: {'model': {a: score(keys[a], idx) for a in AXES}, 'persona': np.stack([slope(devP[idx], keys[a][idx]) for a in AXES], 1)} for sname, idx in by_source.items()}
     band = 2 * max(pos[s]['model'][a]['null_sd'].max() for s in pos for a in AXES)
     OUT.mkdir(parents=True, exist_ok=True)
