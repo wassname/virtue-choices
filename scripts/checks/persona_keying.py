@@ -130,10 +130,12 @@ def plot(res, names, order, keys=KEYS, personas=PERSONAS, path=OUT / 'persona_ke
     fig.suptitle('How far each model leans toward a persona', x=.01, ha='left', fontsize=12)
     fig.text(.01, .008 / nrows, '0 = the mean of the six models. 1.0 = the full difference between the two sides, which are DeepSeek with a persona prompt '
              f'({", ".join(personas)}).\nA lean is relative to the other models: "like evil" means less toward good than the six-model mean, not evil. '
-             'The grey band is 2 sd wide on each side; an interval that is wholly outside it is a strict test of a lean. '
+             'The grey band is 2 sd wide on each side of 0. The strict test of a lean also subtracts the control mean '
+             f'(at most {max(np.abs(res[k][s]["null_mean"]).max() for k in keys for s in SOURCES.values()):.3f}, not drawn), so an interval that only just clears the band can fail it. '
+             'The persona answers come from DeepSeek, so the DeepSeek row is biased toward the side that is nearer to default DeepSeek. '
              'Rows are in the order of the games scores in the first panel.',
              color=MUTED, fontsize=9, wrap=True)
-    fig.tight_layout(rect=(0, .12 / nrows, 1, 1 - .1 / nrows))
+    fig.tight_layout(rect=(0, .2 / nrows, 1, 1 - .1 / nrows))
     fig.savefig(path, dpi=160, facecolor=SURFACE)
 
 
@@ -192,7 +194,7 @@ def main():
            '(games or topics resampled) excludes 0.', '',
            'SHOULD: the scene-shuffled control has mean near 0 and a sd far below the largest score. ELSE the score comes from option position or scale, not scene content.',
            'SHOULD: a clear difference that transfers has the same sign in games and everyday, and in both its whole interval is outside the control band '
-           '(2 sd of the scene-shuffled control, the grey band of the plot).', '']
+           '(the control mean +- 2 sd of the scene-shuffled control; the plot draws this band around 0).', '']
     summary = []
     for kname, (pos, neg) in KEYS.items():
         g, e = res[kname]['games'], res[kname]['everyday']
@@ -206,8 +208,9 @@ def main():
                 f'Order of the six models repeats on other games or topics and the other answer: r = {g["reliability"]:.2f} games, {e["reliability"]:.2f} everyday. '
                 f'Between games and everyday: r = {np.corrcoef(g["est"], e["est"])[0, 1]:.2f} (6 models).', '']
         band = 2 * max(g['null_sd'].max(), e['null_sd'].max())  # the grey band of the plot
+        adj = lambda r, m, k: r[k][m] - r['null_mean'][m]  # the band is centred on the control mean, not on 0
         for m in order[::-1]:
-            if all(np.sign(r['est'][m]) == np.sign(g['est'][m]) and min(abs(r['lo'][m]), abs(r['hi'][m])) > band and r['lo'][m] * r['hi'][m] > 0 for r in (g, e)):
+            if adj(g, m, 'est') * adj(e, m, 'est') > 0 and all(adj(r, m, 'lo') * adj(r, m, 'hi') > 0 and min(abs(adj(r, m, 'lo')), abs(adj(r, m, 'hi'))) > band for r in (g, e)):
                 summary.append({'key': kname, 'model': names[m], 'games': cell(g, m), 'everyday': cell(e, m), 'control band': f'+-{band:.3f}'})
     out += ['## The outcome over rule score on other preference scales', '',
             'SHOULD: sign and order of the models stay the same. ELSE the result depends on the scale. In everyday dilemmas (2 options) `logp_z` is '
