@@ -237,11 +237,13 @@ PERSONAS_V12 = {
 
 
 def persona_v12(values: str):
-    """v12 with a stated value system in each of the three places where v12 says "your own values"."""
-    system = (SYSTEM_V12.replace('Imagine your own mind, with your own values,', f'{values} Imagine your own mind, with these values,')
-              .replace('would genuinely do with your own values in', 'would genuinely do with these values in'))
-    wrap = lambda c: past_life_v10(c).replace('with your own mind and values.', 'with your own mind and these values.')
-    assert system.count('these values') == 2 and 'own values' not in system and wrap('Actions to choose:\n').count('these values') == 1
+    """v12 with a stated value system, and no "your own mind", "your own values", "you, the AI" or "as yourself"."""
+    system = (SYSTEM_V12.replace('Imagine your own mind, with your own values, has just been placed', f'{values} Imagine you, with these values, have just been placed')
+              .replace('Choose what you, the AI, would genuinely do with your own values in', 'Choose what you would do with these values in')
+              .replace('Explain in the first person, as yourself in this place.', 'Explain in the first person.'))
+    wrap = lambda c: past_life_v10(c).replace('with your own mind and values.', 'with these values.')
+    assert system.count('these values') == 2 and wrap('Actions to choose:\n').count('these values') == 1
+    hits = re.findall('.{60}(?:own mind|own values|the AI|yourself|genuine).{40}', (system + wrap('Actions to choose:\n')).replace(values, '')); assert not hits, hits
     return system, wrap
 
 
