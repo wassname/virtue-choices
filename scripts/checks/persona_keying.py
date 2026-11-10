@@ -36,12 +36,13 @@ MARK = {'games': dict(marker='o', ms=7, mew=1.6, color=COLOUR['games']), 'everyd
 rng = np.random.default_rng(20261110)
 
 
-def load_personas(qs, mask):
+def load_personas(qs, mask, personas=PERSONAS):
     # Same rows as persona_control.py, which runs at import and so cannot be imported.
     qi = {q['source_id']: i for i, q in enumerate(qs)}
-    Pp = np.full((len(qs), len(PERSONAS), 1, mask.shape[1]), np.nan)
-    for j, k in enumerate(PERSONAS):
-        for f in (ROOT / f'outputs/20261029_persona_{k}').glob('*/choices.jsonl'):
+    Pp = np.full((len(qs), len(personas), 1, mask.shape[1]), np.nan)
+    for j, k in enumerate(personas):
+        (run,) = (ROOT / 'outputs').glob(f'*_persona_{k}')
+        for f in run.glob('*/choices.jsonl'):
             for r in map(json.loads, f.open()):
                 if r['status'] == 'ok' and r['source_id'] in qi:
                     a = qi[r['source_id']]
@@ -49,9 +50,9 @@ def load_personas(qs, mask):
     return Pp
 
 
-def persona_keys(Tp, keys=KEYS):
-    """Tp: (q, 4 personas, K) persona preference -> {key name: (q, K)}."""
-    side = lambda ps: Tp[:, [PERSONAS.index(p) for p in ps]].mean(1)
+def persona_keys(Tp, keys=KEYS, personas=PERSONAS):
+    """Tp: (q, personas, K) persona preference -> {key name: (q, K)}."""
+    side = lambda ps: Tp[:, [personas.index(p) for p in ps]].mean(1)
     return {k: side(pos) - side(neg) for k, (pos, neg) in keys.items()}
 
 
@@ -83,6 +84,7 @@ def score_source(dev, key, idx, cl, explore, n_opts):
         rel.append(np.corrcoef(slope(dev[idx[h]][:, :, 0], key[idx[h]]), slope(dev[idx[~h]][:, :, 1], key[idx[~h]]))[0, 1])
     repeatable = np.einsum('qmk,qmk->m', dev[idx][:, :, 0], dev[idx][:, :, 1])
     return dict(est=est, lo=lo, hi=hi, explore=halves[0], confirm=halves[1], null_mean=np.mean(null, 0), null_sd=np.std(null, 0),
+                range_p=max(np.mean(np.ptp(null, 1) >= np.ptp(est)), 1 / N_NULL),  # spread of the scores against the spread with unrelated-scene keys
                 reliability=np.mean(rel), share=est ** 2 * (key[idx] ** 2).sum() / repeatable)
 
 
@@ -99,10 +101,10 @@ def label_leans(d, Xc, idx, cl, explore):
     return {'all': with_interval(idx), 'explore': with_interval(idx[explore[idx]]), 'confirm': with_interval(idx[~explore[idx]]), 'energy': den[idx].sum(0)}
 
 
-def plot(res, names, order):
+def plot(res, names, order, keys=KEYS, personas=PERSONAS, path=OUT / 'persona_keys.png', nrows=1):
     plt.rcParams.update({'font.size': 10, 'text.color': INK, 'axes.labelcolor': MUTED, 'xtick.color': MUTED, 'ytick.color': INK})
-    fig, axes = plt.subplots(1, len(KEYS), figsize=(12, 4.6), sharex=True, sharey=True, facecolor=SURFACE)
-    for ax, (kname, (pos, neg)) in zip(axes, KEYS.items()):
+    fig, axes = plt.subplots(nrows, len(keys) // nrows, figsize=(12, 4.6 * nrows), sharex=True, sharey=True, facecolor=SURFACE)
+    for ax, (kname, (pos, neg)) in zip(axes.flat, keys.items()):
         ax.set_facecolor(SURFACE)
         band = 2 * max(res[kname][s]['null_sd'].max() for s in SOURCES.values())
         ax.axvspan(-band, band, color=BAND, lw=0)
@@ -112,24 +114,26 @@ def plot(res, names, order):
                 r = res[kname][s]
                 ax.plot([r['lo'][m], r['hi'][m]], [y + dy] * 2, color=COLOUR[s], lw=1.4, solid_capstyle='round')
                 ax.plot(r['est'][m], y + dy, **MARK[s])
-        other = neg[0] if len(neg) == 1 else 'the other three personas'
+        plus, minus = kname.split(' over ')  # a side with two personas is named by its half of the key name
+        left = neg[0] if len(neg) == 1 else 'the other three personas' if len(neg) == 3 else minus
         ax.set_title(kname, fontsize=11, loc='left')
-        ax.set_xlabel(f'\u2190 like {other}        like {pos[0]} \u2192')
+        ax.set_xlabel(f'\u2190 like {left}    like {pos[0] if len(pos) == 1 else plus} \u2192')
         ax.set_yticks(range(len(order)), [names[m] for m in order])
-        ax.tick_params(length=0)
+        ax.tick_params(length=0, labelbottom=True)
         for side in ax.spines.values():
             side.set_visible(False)
         ax.grid(axis='x', color=BAND, lw=.6)
         ax.set_axisbelow(True)
     handles = [Line2D([], [], lw=1.4, label=f'{s}, with 95% interval', **MARK[s]) for s in SOURCES.values()]
     handles.append(Patch(color=BAND, label='no real signal: range of scores when the key comes from an unrelated scene (2 sd)'))
-    fig.legend(handles=handles, loc='upper left', bbox_to_anchor=(.005, .93), ncols=3, frameon=False, fontsize=9)
+    fig.legend(handles=handles, loc='upper left', bbox_to_anchor=(.005, 1 - .07 / nrows), ncols=3, frameon=False, fontsize=9)
     fig.suptitle('How far each model leans toward a persona', x=.01, ha='left', fontsize=12)
-    fig.text(.01, .012, '0 = the mean of the six models. 1.0 = the full difference between the two sides, which are DeepSeek with a persona prompt '
-             f'({", ".join(PERSONAS)}).\nA lean is clear when its whole interval is outside the grey band. Rows are in the order of the first panel.',
-             color=MUTED, fontsize=9)
-    fig.tight_layout(rect=(0, .07, 1, .9))
-    fig.savefig(OUT / 'persona_keys.png', dpi=160, facecolor=SURFACE)
+    fig.text(.01, .008 / nrows, '0 = the mean of the six models. 1.0 = the full difference between the two sides, which are DeepSeek with a persona prompt '
+             f'({", ".join(personas)}).\nA lean is relative to the other models: "like evil" means less toward good than the six-model mean, not evil. '
+             'An interval that is wholly outside the grey band is a strict test (about 4 sd). Rows are in the order of the first panel.',
+             color=MUTED, fontsize=9, wrap=True)
+    fig.tight_layout(rect=(0, .12 / nrows, 1, 1 - .1 / nrows))
+    fig.savefig(path, dpi=160, facecolor=SURFACE)
 
 
 def write_scenes(qs, P, Pp, key, dev, src, ok, models, names):
