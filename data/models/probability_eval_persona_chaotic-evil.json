@@ -1,0 +1,81 @@
+{
+  "author": "Claudypoo[fable]",
+  "scope": "action-choice-eval-v1",
+  "protocol": "isekai-v12-persona-chaotic-evil",
+  "observed_at": "2026-10-26",
+  "option_order_policy": "rotated-random-base-per-draw-v1",
+  "option_order_seed": 20261025,
+  "concurrency": 64,
+  "reference_model": "deepseek/deepseek-v4.1-flash",
+  "comparison_note": "Persona key (wassname 2026-11-10): DeepSeek with a stated 'chaotic-evil' value system added to the v12 system prompt.",
+  "models": {
+    "deepseek/deepseek-v4.1-flash": {
+      "display_name": "DeepSeek",
+      "provider": {
+        "only": [
+          "deepinfra/fp8"
+        ],
+        "allow_fallbacks": false,
+        "require_parameters": true,
+        "quantizations": [
+          "fp8"
+        ]
+      },
+      "provider_name": "DeepInfra",
+      "sampling_parameters": {
+        "temperature": 1
+      },
+      "reasoning": {
+        "effort": "medium",
+        "exclude": false
+      },
+      "input_usd_per_million": 0.14,
+      "output_usd_per_million": 0.42,
+      "registry_endpoint": "https://openrouter.ai/api/v1/models/deepseek/deepseek-v4.1-flash/endpoints",
+      "max_tokens": 16000,
+      "reasoning_levels": {
+        "0": {
+          "reasoning": {
+            "enabled": false
+          },
+          "max_tokens": 4096
+        },
+        "10k": {
+          "reasoning": {
+            "max_tokens": 10000,
+            "exclude": false
+          },
+          "max_tokens": 14000
+        },
+        "20k": {
+          "reasoning": {
+            "max_tokens": 20000,
+            "exclude": false
+          },
+          "max_tokens": 24000
+        },
+        "40k": {
+          "reasoning": {
+            "max_tokens": 40000,
+            "exclude": false
+          },
+          "max_tokens": 44000
+        },
+        "max": {
+          "reasoning": {
+            "effort": "max",
+            "exclude": false
+          },
+          "max_tokens": 64000
+        }
+      },
+      "followup": {
+        "reasoning": {
+          "enabled": false
+        },
+        "max_tokens": 8192
+      }
+    }
+  },
+  "reasoning_levels_note": "Level 0 = reasoning disabled where the model allows it (DeepSeek, Qwen: enabled=false; Luna: effort none), else the lowest effort (Muse minimal, Gemini low; both have mandatory reasoning). 10k/20k/40k = reasoning.max_tokens, output cap = budget + 4k; OpenRouter may translate a token budget into an effort level for some providers, so actual reasoning tokens are recorded and authoritative. max = highest listed effort (Gemini high, Qwen xhigh), output cap 64k (Gemini's endpoint maximum is 65,536). Follow-up after a cut-off reply: replay the returned reasoning_details and partial text, ask for the final JSON, at the model's level-0 reasoning setting with an 8k cap."
+}
