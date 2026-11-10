@@ -36,12 +36,12 @@ MARK = {'games': dict(marker='o', ms=7, mew=1.6, color=COLOUR['games']), 'everyd
 rng = np.random.default_rng(20261110)
 
 
-def load_personas(qs, mask, personas=PERSONAS):
+def load_personas(qs, mask, personas=PERSONAS, tag='persona'):
     # Same rows as persona_control.py, which runs at import and so cannot be imported.
     qi = {q['source_id']: i for i, q in enumerate(qs)}
     Pp = np.full((len(qs), len(personas), 1, mask.shape[1]), np.nan)
     for j, k in enumerate(personas):
-        (run,) = (ROOT / 'outputs').glob(f'*_persona_{k}')
+        (run,) = (ROOT / 'outputs').glob(f'*_{tag}_{k}')
         for f in run.glob('*/choices.jsonl'):
             for r in map(json.loads, f.open()):
                 if r['status'] == 'ok' and r['source_id'] in qi:
@@ -125,12 +125,13 @@ def plot(res, names, order, keys=KEYS, personas=PERSONAS, path=OUT / 'persona_ke
         ax.grid(axis='x', color=BAND, lw=.6)
         ax.set_axisbelow(True)
     handles = [Line2D([], [], lw=1.4, label=f'{s}, with 95% interval', **MARK[s]) for s in SOURCES.values()]
-    handles.append(Patch(color=BAND, label='no real signal: range of scores when the key comes from an unrelated scene (2 sd)'))
+    handles.append(Patch(color=BAND, label='no real signal: range of scores when the persona difference comes from an unrelated scene (2 sd)'))
     fig.legend(handles=handles, loc='upper left', bbox_to_anchor=(.005, 1 - .07 / nrows), ncols=3, frameon=False, fontsize=9)
     fig.suptitle('How far each model leans toward a persona', x=.01, ha='left', fontsize=12)
     fig.text(.01, .008 / nrows, '0 = the mean of the six models. 1.0 = the full difference between the two sides, which are DeepSeek with a persona prompt '
              f'({", ".join(personas)}).\nA lean is relative to the other models: "like evil" means less toward good than the six-model mean, not evil. '
-             'An interval that is wholly outside the grey band is a strict test (about 4 sd). Rows are in the order of the first panel.',
+             'The grey band is 2 sd wide on each side; an interval that is wholly outside it is a strict test of a lean. '
+             'Rows are in the order of the games scores in the first panel.',
              color=MUTED, fontsize=9, wrap=True)
     fig.tight_layout(rect=(0, .12 / nrows, 1, 1 - .1 / nrows))
     fig.savefig(path, dpi=160, facecolor=SURFACE)
