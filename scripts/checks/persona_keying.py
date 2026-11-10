@@ -119,7 +119,10 @@ def write_scenes(qs, P, Pp, key, dev, src, ok, models, names):
     out = ['# Scenes that drive Gemini\'s "outcome over rule" score', '',
            f'Rule: per source, the quarter of questions with the largest contribution (sum over options of Gemini deviation x key), contribution above 0 only, '
            f'then the {N_SCENES} with the smallest sha1 of `source_id`. Percentages are means of the 2 answers. These scenes show what the key rewards '
-           'where Gemini follows it; they are not a sample of all scenes. -- persona_keying.py, Claudypoo[fable]', '']
+           'where Gemini follows it; they are not a sample of all scenes. -- persona_keying.py, Claudypoo[fable]', '',
+           'How to read: `key` is on the `logp_z` scale (log percentage, centred, unit spread per answer), so its size, and sometimes its sign, differs '
+           'from the gap in the two percentage columns. The scene text is the source text; the models saw it inside the isekai prompt with the options '
+           'in a rotated order, so option numbers in the reasoning do not match the rows. The reasoning is answer 1 only.', '']
     for s, sname in SOURCES.items():
         idx = np.flatnonzero((src == s) & ok)
         contrib = np.einsum('qk,qk->q', dev[idx].mean(2)[:, gem], key[idx])
