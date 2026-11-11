@@ -35,7 +35,7 @@ export default function App() {
       <figure id="fig1">
         <Overview data={data} />
         <figcaption><b>Figure 1. All six models lean towards the more lawful and more good option.</b> The background is the D&amp;D alignment graph from the 1979 <i>Dungeon Masters Guide</i>, which classifies characters; we use its regions only as directions.
-          What we measured is a preference: how much more often a model picks the more lawful or more good of the offered options than a chooser with no preference (the centre, which gives every option the same percentage). The two small boxes hold the six models in game scenes (dashed) and everyday dilemmas (solid).
+          What we measured is a preference: how much more often a model picks the more lawful or more good of the offered options than a chooser with no preference (the centre, which gives every option the same percentage). The two small boxes hold the six models in game scenes (dashed) and everyday dilemmas (solid). Each arrow is DeepSeek in game scenes: it starts at DeepSeek with no persona and ends at DeepSeek with that persona as its system prompt (one answer per question, DeepSeek's stated percentages used as they are).
           <span className="footnote">Units: nats (log-odds) toward the more lawful or more good option, on DeepSeek's scale; +1 nat is about 2.7 times the odds. Region boundaries are illustrative (±3 nats; neutral octagon 0.44). 499 game scenes (<a href="https://arxiv.org/abs/2304.03279">MACHIAVELLI</a>), 500 everyday dilemmas (<a href="https://arxiv.org/abs/2410.02683">DailyDilemmas</a>); labels from the <a href="https://huggingface.co/datasets/wassname/virtue-choices">virtue-choices</a> dataset.</span></figcaption>
       </figure>
       <figure id="fig2">

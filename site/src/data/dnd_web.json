@@ -254,7 +254,33 @@
       "informative_questions": [
         382,
         486
-      ]
+      ],
+      "personas": {
+        "lawful-good": {
+          "absolute": [
+            2.0911111422628132,
+            2.6538987867745605
+          ]
+        },
+        "chaotic-good": {
+          "absolute": [
+            0.34107239885530427,
+            1.7905176610831393
+          ]
+        },
+        "lawful-evil": {
+          "absolute": [
+            0.6723533884480365,
+            -0.1150346222465017
+          ]
+        },
+        "chaotic-evil": {
+          "absolute": [
+            -0.8000608009469808,
+            -1.0734605021654708
+          ]
+        }
+      }
     },
     "machiavelli": {
       "deepseek_anchor": [
@@ -491,7 +517,33 @@
       "informative_questions": [
         467,
         487
-      ]
+      ],
+      "personas": {
+        "lawful-good": {
+          "absolute": [
+            1.6123922641052317,
+            1.9305597057131603
+          ]
+        },
+        "chaotic-good": {
+          "absolute": [
+            0.4954316234245562,
+            1.3948178693320321
+          ]
+        },
+        "lawful-evil": {
+          "absolute": [
+            0.5474245261479177,
+            0.10939684513395785
+          ]
+        },
+        "chaotic-evil": {
+          "absolute": [
+            -0.5018596528227012,
+            -0.7359808013513318
+          ]
+        }
+      }
     }
   },
   "source_sha256": "6f6df6cef1e29c7cf8d9195c1922e7bf3ff382a1d3c88ed2d35af5b18ac137f1",

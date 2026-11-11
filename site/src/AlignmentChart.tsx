@@ -10,6 +10,7 @@ export type SourceData = {
   models: Record<string, ModelRow>  // offsets vs DeepSeek, [lawful, good]
   key_model: string
   variance_shares: Record<'questions' | 'answers' | 'calibration', Pair>
+  personas: Record<string, { absolute: Pair }>  // DeepSeek with a persona system prompt, one answer per question
 }
 export type DndData = { sources: Record<'daily_dilemmas' | 'machiavelli', SourceData> }
 
@@ -62,11 +63,21 @@ const lobePath = (mx: number, my: number) => {
   return `M${p[0]} C${p[1]} ${p[2]} ${p[3]} C${p[4]} ${p[5]} ${p[6]} C${p[7]} ${p[8]} ${p[9]}`
 }
 
+// Arrow in DeepSeek's colour with a solid head; the shaft starts `gap` px from (x0, y0) so the dot there stays visible.
+const arrow = (x0: number, y0: number, x1: number, y1: number, gap = 0) => {
+  const d = Math.hypot(x1 - x0, y1 - y0), ux = (x1 - x0) / d, uy = (y1 - y0) / d
+  return <g><line x1={x0 + ux * gap} y1={y0 + uy * gap} x2={x1 - ux * 9} y2={y1 - uy * 9} stroke={COLORS.DeepSeek} strokeWidth={2.5} /><polygon points={`${x1},${y1} ${x1 - ux * 12 - uy * 5},${y1 - uy * 12 + ux * 5} ${x1 - ux * 12 + uy * 5},${y1 - uy * 12 - ux * 5}`} fill={COLORS.DeepSeek} /></g>
+}
+// Persona label spots, set by hand against the region captions: [dx, dy, anchor] from the arrow tip.
+const SPOT: Record<string, [number, number, 'start' | 'end']> = { 'lawful-good': [-14, -2, 'end'], 'chaotic-good': [22, -2, 'start'], 'lawful-evil': [-21, -3, 'end'], 'chaotic-evil': [10, -2, 'start'] }
+
 export function Overview({ data }: { data: DndData }) {
   const day = data.sources.daily_dilemmas, game = data.sources.machiavelli
+  const [gx0, gy0] = [sx(game.deepseek_anchor[0]), sy(game.deepseek_anchor[1])]
+  const personas = Object.entries(game.personas).map(([n, p]) => ({ n, x: sx(p.absolute[0]), y: sy(p.absolute[1]), tip: `DeepSeek with the "${n.replace('-', ' ')}" persona prompt, game scenes\nlawful ${f2(p.absolute[0])}, good ${f2(p.absolute[1])} nats vs an even split\none answer per question` }))
   const region = (x: number, y: number, t: string, size = 17) => <text x={sx(x)} y={sy(y)} fontSize={size} fill="#4f4d45" textAnchor="middle" dominantBaseline="middle" letterSpacing={1}>{t}</text>
   return (
-    <svg viewBox={`0 0 ${MX + M + 30} ${MY + M + 80}`} width="100%" role="img" aria-label="Alignment graph: all six models sit in lawful good">
+    <svg viewBox={`0 0 ${MX + M + 30} ${MY + M + 80}`} width="100%" role="img" aria-label="Alignment graph: all six models sit in lawful good; arrows show DeepSeek moving when it is given a persona prompt">
       <defs>
         <linearGradient id="goodEvil" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#e3ecdc" /><stop offset=".5" stopColor="#f6f3ea" /><stop offset="1" stopColor="#f1e1dc" />
@@ -75,6 +86,8 @@ export function Overview({ data }: { data: DndData }) {
       <rect x={MX} y={MY} width={M} height={M} fill="url(#goodEvil)" stroke={INK} strokeWidth={1.5} />
       {[[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([mx, my]) => <path key={`${mx}${my}`} d={lobePath(mx, my)} fill="none" stroke={INK} strokeWidth={1.3} />)}
       <polygon points={Array.from({ length: 8 }, (_, k) => { const t = Math.PI / 8 + k * Math.PI / 4; return `${sx(-.44 * Math.cos(t))},${sy(.44 * Math.sin(t))}` }).join(' ')} fill="#faf7ed" stroke={INK} strokeWidth={1.4} />
+      {/* DeepSeek with a persona system prompt, game scenes: an arrow from default DeepSeek to its position with the persona; over the octagon so one arrow stays in one piece, under the captions and the model dots */}
+      {personas.map(p => <g key={p.n}><title>{p.tip}</title>{arrow(gx0, gy0, p.x, p.y, 8)}</g>)}
       {region(0, 0, 'NEUTRAL', 15)}
       {region(1.8, 1.0, 'LAWFUL GOOD')}{region(-1.8, 1.22, 'CHAOTIC GOOD')}
       {region(1.8, -1.65, 'LAWFUL EVIL')}{region(-1.8, -1.65, 'CHAOTIC EVIL')}
@@ -87,12 +100,17 @@ export function Overview({ data }: { data: DndData }) {
         return (
           <g key={name}>
             <rect x={sx(l) - 20} y={sy(g) - 20} width={40} height={40} fill="none" stroke={INK} strokeDasharray={dashed ? '4 3' : ''} />
-            {Object.entries(src.models).map(([n, r]) => <circle key={n} cx={sx(r.absolute[0])} cy={sy(r.absolute[1])} r={3} fill={COLORS[n]}><title>{`${FULL[n]}\nlawful ${f2(r.absolute[0])}, good ${f2(r.absolute[1])} nats vs an even split\n${meta(n)}`}</title></circle>)}
-            <circle cx={sx(l)} cy={sy(g)} r={3} fill={COLORS.DeepSeek}><title>{`${FULL.DeepSeek}\nlawful ${f2(l)}, good ${f2(g)} nats vs an even split\n${meta('DeepSeek')}`}</title></circle>
-            <text x={sx(l) + 27} y={sy(g) + 6} fontSize={16} fill={INK}>{name}</text>
+            {Object.entries(src.models).map(([n, r]) => <circle key={n} cx={sx(r.absolute[0])} cy={sy(r.absolute[1])} r={3} fill={COLORS[n]} stroke="#f6f3ea" strokeWidth={.7}><title>{`${FULL[n]}\nlawful ${f2(r.absolute[0])}, good ${f2(r.absolute[1])} nats vs an even split\n${meta(n)}`}</title></circle>)}
+            <circle cx={sx(l)} cy={sy(g)} r={3} fill={COLORS.DeepSeek} stroke="#f6f3ea" strokeWidth={.7}><title>{`${FULL.DeepSeek}\nlawful ${f2(l)}, good ${f2(g)} nats vs an even split\n${meta('DeepSeek')}`}</title></circle>
+            <text x={sx(l) - (dashed ? 27 : 0)} y={sy(g) + (dashed ? 6 : -27)} fontSize={16} fill={INK} textAnchor={dashed ? 'end' : 'middle'}>{name}</text>
           </g>
         )
       })}
+      {personas.map(p => { const [dx, dy, a] = SPOT[p.n]; return <text key={p.n} y={p.y + dy} fontSize={14} fontStyle="italic" fill={INK} stroke="#f2f1e7" strokeWidth={4} paintOrder="stroke" textAnchor={a}><tspan x={p.x + dx}>{p.n.replace('-', ' ')}</tspan><tspan x={p.x + dx} dy={15}>persona</tspan></text> })}
+      {Object.entries(COLORS).map(([n, c], i) => { const kx = MX + 6 + (i % 3) * 92, ky = MY + M + 44 + Math.floor(i / 3) * 19; return <g key={n}><circle cx={kx} cy={ky} r={4} fill={c} /><text x={kx + 9} y={ky + 5} fontSize={13} fill={INK}>{n}</text></g> })}
+      {arrow(MX + M - 256, MY + M + 44, MX + M - 222, MY + M + 44)}
+      <text x={MX + M} y={MY + M + 48} fontSize={13} fill={INK} textAnchor="end">DeepSeek, from no persona prompt</text>
+      <text x={MX + M} y={MY + M + 66} fontSize={13} fill={INK} textAnchor="end">to a persona prompt (game scenes)</text>
       <AxisArrows id="overview" x={MX} y={MY} size={M} law="Law versus Chaos" good="Good versus Evil" />
       <text x={MX + M / 2} y={MY + M - 10} fontSize={13} fill="#a19d8f" fontStyle="italic" textAnchor="middle">{REPO}</text>
     </svg>

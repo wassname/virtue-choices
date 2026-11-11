@@ -131,6 +131,6 @@ site-shot:
     trap 'kill $server' EXIT
     sleep 3
     for v in overview everyday games; do
-        out=docs/figures/dnd_alignment.png; [ "$v" = overview ] || out=docs/figures/dnd_zoom_$v.png
-        google-chrome --headless=new --no-sandbox --disable-gpu --hide-scrollbars --window-size=1100,900 --virtual-time-budget=4000 --screenshot=$out "http://127.0.0.1:8083/?shot=$v"
+        out=docs/figures/dnd_alignment.png h=1100; [ "$v" = overview ] || out=docs/figures/dnd_zoom_$v.png h=1260  # heights fit the whole chart at this width
+        google-chrome --headless=new --no-sandbox --disable-gpu --hide-scrollbars --window-size=1100,$h --virtual-time-budget=4000 --screenshot=$out "http://127.0.0.1:8083/?shot=$v"
     done

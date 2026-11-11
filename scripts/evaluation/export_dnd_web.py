@@ -6,13 +6,44 @@ from pathlib import Path
 
 import numpy as np
 
-from plot_dnd_classic import ROOT, digest, variance_key
+from calibrate_probability_eval import REFERENCE
+from plot_dnd_classic import ROOT, digest, estimate, pack, variance_key
+from plot_probability_eval import load_calibration
+
+PERSONAS = ('lawful-good', 'chaotic-good', 'lawful-evil', 'chaotic-evil')
+
+
+def persona_points(tables, tag, ids):
+    """DeepSeek with a persona system prompt, on the axes of the default DeepSeek anchor. It is the same model, so its stated percentages are used as they are. One answer per question, so no interval. -- Claudypoo[fable]"""
+    lines, _, _, folds = load_calibration(tables)
+    index = [next(i for i, d in enumerate(lines[0]['_meta']['dimensions']) if d['id'] == key) for key in ('order', 'morality')]
+    label_fn = lambda q: np.array([[q['option_scores'][o][i] for i in index] for o in q['options']], float)
+
+    def point(qs, answers):  # answers: source_id -> {option id: percent}; pack wants two draws, so the one answer is given twice
+        data = pack([dict(q, models={REFERENCE: q['models'][REFERENCE], 'subject': {'draws': [{'draw': d, 'probabilities': answers[q['source_id']]} for d in (0, 1)]}}) for q in qs], 'subject', label_fn, folds)
+        return [estimate(data['coeff'], data['den'], data['logs'][m][:, 1]) for m in ('subject', REFERENCE)]
+
+    out = {}
+    for source in ids:
+        qs = [q for q in lines[1:] if q['source_id'] in ids[source]]
+        assert len(qs) == len(ids[source])
+        alone, anchor = point(qs, {q['source_id']: q['models'][REFERENCE]['draws'][0]['probabilities'] for q in qs})
+        assert np.abs(alone - anchor).max() < .05, (source, alone, anchor)  # default DeepSeek from one of its answers stays at its anchor
+        out[source] = {}
+        for name in PERSONAS:
+            (run,) = (ROOT / 'outputs').glob(f'*_{tag}_{name}')
+            rows = [json.loads(line) for f in sorted(run.glob('*/choices.jsonl')) for line in f.open()]
+            assert len(rows) == len({r['source_id'] for r in rows}) and all(r['status'] == 'ok' for r in rows if r['source_id'] in ids[source])
+            out[source][name] = {'absolute': point(qs, {r['source_id']: r['original_probabilities'] for r in rows})[0].tolist()}
+    return out
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--input', type=Path, default=ROOT / '.local/choice_preview/random1000/dnd_classic.json')
     parser.add_argument('--out', type=Path, default=ROOT / 'outputs/20261027_random1000_v12/calibration_heldout/dnd_web.json')
+    parser.add_argument('--tables', type=Path, default=ROOT / 'outputs/20261027_random1000_v12/question_tables.jsonl')
+    parser.add_argument('--personas', default='persona-v3', help='tag of the persona runs: outputs/*_<tag>_<persona>')
     args = parser.parse_args()
     data = json.loads(args.input.read_text())
     assert data['display_interval'] == 'cluster_refit' and data['bootstrap_replicates'] == 999
@@ -46,6 +77,8 @@ def main():
                 assert intervals.shape == (2, 2) and np.isfinite(intervals).all() and np.all(intervals[:, 0] < intervals[:, 1])
         assert len(out['models']) == 5
         web['sources'][source] = out
+    for source, points in persona_points(args.tables, args.personas, {s: set(r['question_ids']) for s, r in data['sources'].items()}).items():
+        web['sources'][source]['personas'] = points
     web['caption'] = 'Models favour lawful and good options relative to an even split; region boundaries are illustrative. Insets show calibrated offsets from DeepSeek. The uncertainty key normalizes overlapping diagnostic variances.'
     day, game = (web['sources'][s] for s in ('daily_dilemmas', 'machiavelli'))
     dr, gr = day['sum_var_over_full'], game['sum_var_over_full']
